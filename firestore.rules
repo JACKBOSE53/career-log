@@ -27,18 +27,19 @@ service cloud.firestore {
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount']) &&
         (
           !request.resource.data.diff(resource.data).affectedKeys().contains('followersCount') ||
-          request.resource.data.followersCount == resource.data.followersCount + 1 ||
-          request.resource.data.followersCount == resource.data.followersCount - 1
+          request.resource.data.followersCount == resource.data.get('followersCount', 0) + 1 ||
+          request.resource.data.followersCount == resource.data.get('followersCount', 0) - 1
         ) && (
           !request.resource.data.diff(resource.data).affectedKeys().contains('followingCount') ||
-          request.resource.data.followingCount == resource.data.followingCount + 1 ||
-          request.resource.data.followingCount == resource.data.followingCount - 1
+          request.resource.data.followingCount == resource.data.get('followingCount', 0) + 1 ||
+          request.resource.data.followingCount == resource.data.get('followingCount', 0) - 1
         )
       );
       allow delete: if false;
 
       match /notifications/{notifId} {
-        allow read, write: if isSignedIn();
+        allow read, update, delete: if isOwner(uid);
+        allow create: if isSignedIn();
       }
 
       match /following/{targetUid} {

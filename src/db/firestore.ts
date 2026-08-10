@@ -704,6 +704,9 @@ export function subscribeToUserPosts(
       triggerMerge();
     }, (err: Error) => {
       console.warn(`Firestore user posts sub-query (${key}) error:`, err);
+      // エラーが起きた場合でも空配列をセットしてマージを動かす！
+      resultsMap.set(key, []);
+      triggerMerge();
     });
     unsubscribes.push(unsub);
   };
