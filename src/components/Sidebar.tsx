@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Home, Search, Users, Bell, User, Plus, Sparkles, Calendar, Edit3, Timer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { getUnreadCount } from '../db/store';
-import { subscribeToUserProfile, type UserProfile } from '../db/firestore';
 
 export type Page = 'home' | 'calendar' | 'search' | 'communities' | 'notifications' | 'profile';
 
@@ -25,17 +24,7 @@ const NAV_ITEMS = [
 
 
 export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreatePost, onOpenTimer }: SidebarProps) {
-  const { currentUser } = useAuth();
-  const [me, setMe] = useState<UserProfile | null>(null);
-
-  useEffect(() => {
-    if (!currentUser) return;
-    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile) => {
-      setMe(profile);
-    });
-    return () => unsubscribe();
-  }, [currentUser]);
-
+  const { profile: me } = useAuth();
   if (!me) return null;
 
   return (

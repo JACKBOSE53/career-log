@@ -13,29 +13,16 @@ import CreatePostModal from './components/CreatePostModal';
 import StudyTimerModal from './components/StudyTimerModal';
 import { getUnreadCount } from './db/store';
 import { useAuth } from './contexts/AuthContext';
-import { subscribeToNotifications, subscribeToUserProfile, type UserProfile } from './db/firestore';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
 
 import ToastNotification, { type ToastState } from './components/ToastNotification';
 
 export default function App() {
-  const { currentUser, loading } = useAuth();
-  const [myProfile, setMyProfile] = useState<UserProfile | null | undefined>(undefined);
-
-  useEffect(() => {
-    if (!currentUser) {
-      setMyProfile(null);
-      return;
-    }
-    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile) => {
-      setMyProfile(profile);
-    });
-    return () => unsubscribe();
-  }, [currentUser]);
+  const { currentUser, profile, loading, logout } = useAuth();
 
   // ── 認証ローディング中 ──────────────────────────────────────
-  if (loading || (currentUser && myProfile === undefined)) {
+  if (loading) {
     return (
       <div style={{
         minHeight: '100vh', background: '#0B0F17',
@@ -55,13 +42,13 @@ export default function App() {
   if (!currentUser) return <LoginPage />;
 
   // ── プロフィール未設定（オンボーディング） ──────────────────
-  if (!currentUser.displayName || !myProfile) return <OnboardingPage />;
+  if (!currentUser.displayName || !profile) return <OnboardingPage />;
 
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadCount, setUnreadCount] = useState(getUnreadCount());
   const [tick, setTick] = useState(0);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
@@ -85,26 +72,17 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // Firebase Authの状態を確認し、通知件数を購読
-  useEffect(() => {
-    if (!currentUser) {
-      setUnreadCount(0);
-      return;
-    }
-    const unsubscribe = subscribeToNotifications(currentUser.uid, (list) => {
-      const unread = list.filter((n) => !n.read).length;
-      setUnreadCount(unread);
-    });
-    return () => unsubscribe();
-  }, [currentUser]);
-
   const handleUpdate = useCallback(() => {
+    setUnreadCount(getUnreadCount());
     setTick((t) => t + 1);
   }, []);
 
   function handleNavigate(page: Page) {
     setCurrentPage(page);
     setProfileUserId(null);
+    if (page === 'notifications') {
+      setTimeout(() => setUnreadCount(getUnreadCount()), 200);
+    }
   }
 
   function handleProfileClick(userId: string) {
