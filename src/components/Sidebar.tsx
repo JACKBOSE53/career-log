@@ -1,9 +1,9 @@
 import { useState } from 'react';
-import { Home, Search, Users, Bell, User, Plus, Sparkles, Calendar, Edit3, Timer, LogOut } from 'lucide-react';
+import { Home, Search, Bell, User, Plus, Sparkles, Calendar, Edit3, Timer, LogOut } from 'lucide-react';
 import { getCurrentUser, getUnreadCount } from '../db/store';
 import { useAuth } from '../contexts/AuthContext';
 
-export type Page = 'home' | 'calendar' | 'search' | 'communities' | 'notifications' | 'profile';
+export type Page = 'home' | 'calendar' | 'search' | 'notifications' | 'profile';
 
 interface SidebarProps {
   currentPage: Page;
@@ -17,7 +17,6 @@ const NAV_ITEMS = [
   { id: 'home' as Page, label: 'タイムライン', icon: Home },
   { id: 'calendar' as Page, label: 'カレンダー', icon: Calendar },
   { id: 'search' as Page, label: 'さがす', icon: Search },
-  { id: 'communities' as Page, label: 'コミュニティ', icon: Users },
   { id: 'notifications' as Page, label: '通知', icon: Bell },
   { id: 'profile' as Page, label: 'マイページ', icon: User },
 ];
