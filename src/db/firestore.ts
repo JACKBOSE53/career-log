@@ -488,7 +488,7 @@ export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt
       likesCount: 0,
       commentsCount: 0,
       likedUserIds: [],
-      createdAt: Timestamp.fromDate(now),
+      createdAt: serverTimestamp(),
     });
   } catch (e) {
     console.warn('Firestore save skipped or failed, fallback to LocalStorage:', e);

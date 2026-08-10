@@ -35,10 +35,10 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
     
     const sorted = Array.from(map.values()).sort((a, b) => {
       const getMillis = (dateVal: any) => {
-        if (!dateVal) return 0;
+        if (!dateVal) return new Date().getTime();
         if (dateVal instanceof Date) return dateVal.getTime();
         if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
-        return new Date(dateVal).getTime() || 0;
+        return new Date(dateVal).getTime() || new Date().getTime();
       };
       return getMillis(b.createdAt) - getMillis(a.createdAt);
     });
