@@ -66,8 +66,24 @@ service cloud.firestore {
 
       allow update: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedUserIds', 'likesCount'])
+        isValidLikeToggle()
       );
+
+      function isValidLikeToggle() {
+        let beforeIds = resource.data.get('likedUserIds', []);
+        let afterIds = request.resource.data.get('likedUserIds', []);
+        let uid = request.auth.uid;
+
+        return isSignedIn() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedUserIds', 'likesCount']) &&
+          request.resource.data.likesCount == afterIds.size() &&
+          (
+            (afterIds.size() == beforeIds.size() + 1 &&
+              afterIds.toSet().difference(beforeIds.toSet()) == [uid].toSet()) ||
+            (afterIds.size() == beforeIds.size() - 1 &&
+              beforeIds.toSet().difference(afterIds.toSet()) == [uid].toSet())
+          );
+      }
 
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
