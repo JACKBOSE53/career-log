@@ -63,7 +63,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   useEffect(() => {
     if (!currentUser) return;
-    const unsubPosts = subscribeToUserPosts(currentUser.uid, (posts) => {
+    const unsubPosts = subscribeToUserPosts(currentUser.uid, currentUser.uid, true, (posts) => {
       setMyPosts(posts);
     });
     const unsubEvents = subscribeToCalendarEvents(currentUser.uid, (events) => {

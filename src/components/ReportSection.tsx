@@ -29,6 +29,7 @@ interface ReportSectionProps {
   onNavigateNotifications?: () => void;
   hideHeaderTab?: boolean;
   onToast?: (message: string, type: 'success' | 'error') => void;
+  userId?: string;
 }
 
 // 7日間の日付ラベルを生成 (例: 2/24 月 〜 3/2 日)
@@ -43,7 +44,7 @@ function getPast7Days() {
       dateStr: `${d.getMonth() + 1}/${d.getDate()}`,
       dayName: dayNames[d.getDay()],
       isToday: i === 0,
-      isoDate: getLocalDateStr(d),
+      isoDate: d.toISOString().split('T')[0],
     });
   }
   return days;
@@ -59,9 +60,11 @@ function getDaysRemaining(targetDateStr: string): number {
 
 // 直近の月曜日を取得 (YYYY-MM-DD)
 function getRecentMondayStr(dateStr?: string): string {
-  if (!dateStr) return getMondayOfCurrentWeek();
-  const d = new Date(dateStr);
-  return getMondayOfCurrentWeek(d);
+  const d = dateStr ? new Date(dateStr) : new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(d.setDate(diff));
+  return monday.toISOString().split('T')[0];
 }
 
 // 月曜日ラベルフォーマット (例: 8/3(月)週)
@@ -71,7 +74,7 @@ function formatMondayLabel(dateStr?: string): string {
   return `${d.getMonth() + 1}/${d.getDate()}(月)週`;
 }
 
-export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigateNotifications, hideHeaderTab, onToast }: ReportSectionProps) {
+export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigateNotifications, hideHeaderTab, onToast, userId }: ReportSectionProps) {
   const { profile: me, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'record' | 'timeline'>('record');
   const [periodFilter, setPeriodFilter] = useState<'week' | 'month' | 'total'>('week');
@@ -83,29 +86,49 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   const [myPosts, setMyPosts] = useState<FirestorePost[]>([]);
   const [postsLoading, setPostsLoading] = useState(true);
 
-  // Firestoreから自分の投稿・イベント・目標を取得
+  // 表示対象のIDと、自分のレポートかどうかの判定
+  const targetUid = userId || currentUser?.uid;
+  const isOwnReport = !userId || userId === currentUser?.uid;
+
+  // Firestoreから対象ユーザーのデータを選択的に取得
   useEffect(() => {
-    if (!currentUser) return;
+    if (!currentUser || !targetUid) return;
     setPostsLoading(true);
-    const unsubPosts = subscribeToUserPosts(currentUser.uid, (posts) => {
-      setMyPosts(posts);
-      setPostsLoading(false);
-    });
-    const unsubEvents = subscribeToCalendarEvents(currentUser.uid, (events) => {
-      const mapped: CountdownEvent[] = events.map(e => ({
-        id: e.id || '',
-        title: e.title,
-        targetDate: e.date,
-        category: e.category,
-        time: e.time,
-        location: e.location,
-        priority: 'high',
-      }));
-      setCountdowns(mapped);
-    });
-    const unsubGoal = subscribeToWeeklyGoal(currentUser.uid, (goal) => {
-      setWeeklyGoalData(goal);
-    });
+
+    // 投稿の購読 (他人の場合はセキュリティルール適合クエリを呼ぶ)
+    const unsubPosts = subscribeToUserPosts(
+      targetUid,
+      currentUser.uid,
+      true,
+      (posts) => {
+        setMyPosts(posts);
+        setPostsLoading(false);
+      }
+    );
+
+    // カレンダーイベントと週次目標は本人しかアクセス権がないため、自分のレポートのときのみ購読する
+    let unsubEvents = () => {};
+    let unsubGoal = () => {};
+
+    if (isOwnReport) {
+      unsubEvents = subscribeToCalendarEvents(currentUser.uid, (events) => {
+        const mapped: CountdownEvent[] = events.map(e => ({
+          id: e.id || '',
+          title: e.title,
+          targetDate: e.date,
+          category: e.category,
+          time: e.time,
+          location: e.location,
+          priority: 'high',
+        }));
+        setCountdowns(mapped);
+      });
+
+      unsubGoal = subscribeToWeeklyGoal(currentUser.uid, (goal) => {
+        setWeeklyGoalData(goal);
+      });
+    }
+
     return () => {
       unsubPosts();
       unsubEvents();
@@ -693,90 +716,92 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
 
         {/* ── 6. 今週の目標 ── */}
-        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          {!weeklyGoalData ? (
-            /* 未設定時の登録誘導デザイン */
-            <div style={{ textAlign: 'center', padding: '12px 8px' }}>
-              <div style={{
-                width: 48, height: 48, borderRadius: '50%',
-                background: 'rgba(59, 130, 246, 0.12)', color: 'var(--color-primary)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                margin: '0 auto 10px', border: '1px solid rgba(59, 130, 246, 0.3)',
-              }}>
-                <Target size={24} />
-              </div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
-                今週の目標を設定してみよう！
-              </h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 14 }}>
-                1週間の取り組み目標時間を決めてモチベーションを高めよう
-              </p>
-              <button
-                onClick={() => setShowGoalModal(true)}
-                className="btn btn-primary"
-                style={{ padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, borderRadius: 99, gap: 6 }}
-              >
-                <Plus size={16} /> 目標を設定する
-              </button>
-            </div>
-          ) : (
-            /* 設定済み時のプログレス表示 */
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                    今週の目標 ({currentWeeklyTargetCategory})
-                  </h2>
+        {isOwnReport && (
+          <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+            {!weeklyGoalData ? (
+              /* 未設定時の登録誘導デザイン */
+              <div style={{ textAlign: 'center', padding: '12px 8px' }}>
+                <div style={{
+                  width: 48, height: 48, borderRadius: '50%',
+                  background: 'rgba(59, 130, 246, 0.12)', color: 'var(--color-primary)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  margin: '0 auto 10px', border: '1px solid rgba(59, 130, 246, 0.3)',
+                }}>
+                  <Target size={24} />
                 </div>
+                <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
+                  今週の目標を設定してみよう！
+                </h3>
+                <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                  1週間の取り組み目標時間を決めてモチベーションを高めよう
+                </p>
                 <button
                   onClick={() => setShowGoalModal(true)}
-                  className="btn btn-secondary btn-sm"
-                  style={{ gap: 4, fontSize: '0.75rem', padding: '4px 10px' }}
+                  className="btn btn-primary"
+                  style={{ padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, borderRadius: 99, gap: 6 }}
                 >
-                  <Target size={14} /> 編集
+                  <Plus size={16} /> 目標を設定する
                 </button>
               </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                {/* 円形プログレスリング */}
-                <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
-                  <svg width="72" height="72" viewBox="0 0 72 72">
-                    <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
-                    <circle
-                      cx="36" cy="36" r="30"
-                      stroke={goalProgressPct >= 100 ? '#16A34A' : '#3B82F6'}
-                      strokeWidth="6"
-                      fill="transparent"
-                      strokeDasharray={2 * Math.PI * 30}
-                      strokeDashoffset={2 * Math.PI * 30 * (1 - goalProgressPct / 100)}
-                      strokeLinecap="round"
-                      transform="rotate(-90 36 36)"
-                      style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                    />
-                  </svg>
-                  <div style={{
-                    position: 'absolute', inset: 0,
-                    display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                      {goalProgressPct}%
-                    </span>
+            ) : (
+              /* 設定済み時のプログレス表示 */
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      今週の目標 ({currentWeeklyTargetCategory})
+                    </h2>
                   </div>
+                  <button
+                    onClick={() => setShowGoalModal(true)}
+                    className="btn btn-secondary btn-sm"
+                    style={{ gap: 4, fontSize: '0.75rem', padding: '4px 10px' }}
+                  >
+                    <Target size={14} /> 編集
+                  </button>
                 </div>
 
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>
-                    {currentWeeklyTargetCategory} の取り組み目標
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  {/* 円形プログレスリング */}
+                  <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+                    <svg width="72" height="72" viewBox="0 0 72 72">
+                      <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
+                      <circle
+                        cx="36" cy="36" r="30"
+                        stroke={goalProgressPct >= 100 ? '#16A34A' : '#3B82F6'}
+                        strokeWidth="6"
+                        fill="transparent"
+                        strokeDasharray={2 * Math.PI * 30}
+                        strokeDashoffset={2 * Math.PI * 30 * (1 - goalProgressPct / 100)}
+                        strokeLinecap="round"
+                        transform="rotate(-90 36 36)"
+                        style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                      />
+                    </svg>
+                    <div style={{
+                      position: 'absolute', inset: 0,
+                      display: 'flex', flexDirection: 'column',
+                      alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                        {goalProgressPct}%
+                      </span>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    進捗: {formatHoursMins(thisWeekMins)} / {formatHoursMins(currentWeeklyTargetMinutes)}
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>
+                      {currentWeeklyTargetCategory} の取り組み目標
+                    </div>
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      進捗: {formatHoursMins(thisWeekMins)} / {formatHoursMins(currentWeeklyTargetMinutes)}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
-        </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {/* ── カウントダウン追加モーダル ── */}

@@ -533,11 +533,39 @@ export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
   });
 }
 
-export function subscribeToUserPosts(userId: string, callback: (posts: FirestorePost[]) => void) {
+export function subscribeToUserPosts(
+  userId: string,
+  currentUserId: string | undefined,
+  isFollowingFriend: boolean,
+  callback: (posts: FirestorePost[]) => void
+) {
   const localUserPosts = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
   callback(localUserPosts);
 
-  const q = query(collection(db, 'posts'), where('userId', '==', userId), orderBy('createdAt', 'desc'));
+  let q;
+  const postsCollection = collection(db, 'posts');
+
+  if (userId === currentUserId) {
+    // 自分の投稿を取得する場合は、すべての公開範囲を安全に取得可能
+    q = query(
+      postsCollection,
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc')
+    );
+  } else {
+    // 他人の投稿を取得する場合は、セキュリティルール（visibility制限）に反しないよう、許可された公開範囲のみに制限してクエリする
+    const allowedVisibilities = isFollowingFriend
+      ? ['public', 'followers', null]
+      : ['public', null];
+
+    q = query(
+      postsCollection,
+      where('userId', '==', userId),
+      where('visibility', 'in', allowedVisibilities),
+      orderBy('createdAt', 'desc')
+    );
+  }
+
   return onSnapshot(q, (snapshot) => {
     const firestorePosts = snapshot.docs.map(doc => {
       const data = doc.data();

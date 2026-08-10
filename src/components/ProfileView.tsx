@@ -93,11 +93,11 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   }, [userId, user]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToUserPosts(userId, (newPosts) => {
+    const unsubscribe = subscribeToUserPosts(userId, currentUser?.uid, following, (newPosts) => {
       setPosts(newPosts);
     });
     return () => unsubscribe();
-  }, [userId]);
+  }, [userId, currentUser, following]);
 
   async function handleFollow() {
     if (!currentUser || followLoading) return;
@@ -645,7 +645,7 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
         {/* ── 【1】レポート欄タブの中身 (完全版ReportSection) ── */}
         {profileTab === 'report' && (
           <div style={{ animation: 'fadeIn 0.15s ease' }}>
-            <ReportSection onUpdate={onUpdate} hideHeaderTab={true} />
+            <ReportSection onUpdate={onUpdate} hideHeaderTab={true} userId={userId} />
           </div>
         )}
 
