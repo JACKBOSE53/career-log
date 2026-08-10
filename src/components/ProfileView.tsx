@@ -40,7 +40,6 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
     university: user?.university ?? '',
     grade: user?.grade ?? '',
     email: user?.email ?? '',
-    password: user?.password ?? '',
     avatarUrl: user?.avatarUrl ?? '',
     defaultVisibility: (user?.defaultVisibility ?? 'public') as 'public' | 'followers' | 'private',
   });
@@ -57,7 +56,6 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       university: u?.university ?? '',
       grade: u?.grade ?? '26卒 (大学3年)',
       email: u?.email ?? '',
-      password: u?.password ?? '',
       avatarUrl: u?.avatarUrl ?? '',
       defaultVisibility: (u?.defaultVisibility ?? 'public') as 'public' | 'followers' | 'private',
     });
@@ -80,7 +78,6 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       university: editForm.university.trim(),
       grade: editForm.grade.trim(),
       email: editForm.email.trim(),
-      password: editForm.password.trim(),
       avatarUrl: editForm.avatarUrl,
       defaultVisibility: editForm.defaultVisibility,
     });
@@ -291,18 +288,8 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
                   />
                 </div>
 
-                <div>
-                  <label style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
-                    パスワード
-                  </label>
-                  <input
-                    type="password"
-                    className="input"
-                    value={editForm.password}
-                    onChange={(e) => setEditForm((f) => ({ ...f, password: e.target.value }))}
-                    placeholder="••••••••"
-                    style={{ fontSize: '0.825rem' }}
-                  />
+                <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  パスワードの変更は、ログイン方法の設定から行えます。
                 </div>
               </div>
 

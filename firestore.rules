@@ -1,0 +1,104 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ─── 共通ヘルパー ──────────────────────────────────────────────────
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // 閲覧者が対象ユーザーをフォロー済みか確認
+    function isFollowerOf(targetUid) {
+      let followId = request.auth.uid + '_' + targetUid;
+      return exists(/databases/$(database)/documents/follows/$(followId));
+    }
+
+    // ─── users コレクション ───────────────────────────────────────────
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow create: if isOwner(uid);
+      allow update: if isOwner(uid) || (
+        isSignedIn() && request.resource.data.diff(resource.data).affectedKeys().hasAny(['followersCount', 'followingCount'])
+      );
+      allow delete: if false;
+
+      match /notifications/{notifId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
+    // ─── posts コレクション ───────────────────────────────────────────
+    match /posts/{postId} {
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        resource.data.visibility == 'public' ||
+        (resource.data.visibility == 'followers' && isFollowerOf(resource.data.userId)) ||
+        resource.data.visibility == null
+      );
+
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+
+      allow update: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedUserIds', 'likesCount'])
+      );
+
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      match /comments/{commentId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // ─── calendarEvents コレクション ──────────────────────────────────
+    match /calendarEvents/{eventId} {
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+
+    // ─── weeklyGoals コレクション ─────────────────────────────────────
+    match /weeklyGoals/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ─── followRequests コレクション ──────────────────────────────────
+    match /followRequests/{requestId} {
+      allow read: if isSignedIn() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
+      allow update: if isSignedIn() && (
+        resource.data.toUid == request.auth.uid ||
+        resource.data.fromUid == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.fromUid == request.auth.uid ||
+        resource.data.toUid == request.auth.uid
+      );
+    }
+
+    // ─── follows コレクション ─────────────────────────────────────────
+    match /follows/{followId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && (
+        request.resource.data.followerId == request.auth.uid ||
+        request.resource.data.followingId == request.auth.uid
+      );
+      allow delete: if isSignedIn() && (
+        resource.data.followerId == request.auth.uid ||
+        resource.data.followingId == request.auth.uid
+      );
+      allow update: if false;
+    }
+  }
+}

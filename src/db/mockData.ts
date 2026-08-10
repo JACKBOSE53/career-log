@@ -38,7 +38,6 @@ export interface User {
   name: string; // ニックネーム
   handle: string;
   email: string; // メールアドレス
-  password?: string; // パスワード
   avatar: string;
   avatarUrl?: string;
   university: string; // 大学名
@@ -175,7 +174,6 @@ export const INITIAL_USERS: User[] = [
     name: '高木 悠太',
     handle: 'yuta_careerlog',
     email: 'yuta@example.com',
-    password: 'password123',
     avatar: 'Y',
     university: '早稲田大学',
     grade: '26卒 (大学3年)',

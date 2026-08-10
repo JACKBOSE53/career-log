@@ -12,11 +12,14 @@ import ProfileView from './components/ProfileView';
 import CreatePostModal from './components/CreatePostModal';
 import StudyTimerModal from './components/StudyTimerModal';
 import { getUnreadCount } from './db/store';
+import { useAuth } from './contexts/AuthContext';
+import AuthScreen from './components/AuthScreen';
 
 
 import ToastNotification, { type ToastState } from './components/ToastNotification';
 
 export default function App() {
+  const { currentUser, loading } = useAuth();
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -31,6 +34,14 @@ export default function App() {
     window.addEventListener('resize', handler);
     return () => window.removeEventListener('resize', handler);
   }, []);
+
+  // ログインが完了した(currentUserが確定した)タイミングで、
+  // そのユーザーの未読通知数を読み直す
+  useEffect(() => {
+    if (currentUser) {
+      setUnreadCount(getUnreadCount());
+    }
+  }, [currentUser]);
 
   const handleUpdate = useCallback(() => {
     setUnreadCount(getUnreadCount());
@@ -59,6 +70,20 @@ export default function App() {
     setCurrentPage('home');
     handleUpdate();
     triggerToast('投稿が完了しました', 'success');
+  }
+
+  // Firebase Authの状態を確認中
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted, #9a9aa5)' }}>
+        読み込み中...
+      </div>
+    );
+  }
+
+  // 未ログインならログイン/新規登録画面を表示
+  if (!currentUser) {
+    return <AuthScreen />;
   }
 
   return (
