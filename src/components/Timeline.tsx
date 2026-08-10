@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Plus, RefreshCw, Users, Globe, Timer } from 'lucide-react';
 import { subscribeToPosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
 import { isFollowing } from '../db/store';
@@ -25,34 +25,36 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   const { currentUser } = useAuth();
   const myId = currentUser?.uid;
 
-  const fetchPostsManually = () => {
+  const latestFirestorePosts = useRef<FirestorePost[]>([]);
+
+  const mergeAndSetPosts = (firestorePosts: FirestorePost[]) => {
     const currentLocals = getLocalPosts();
-    setPosts((prevPosts) => {
-      const firestoreOnly = prevPosts.filter((p) => !p.id?.startsWith('local-post-'));
-      const map = new Map<string, FirestorePost>();
-      currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
-      firestoreOnly.forEach((p) => { if (p.id) map.set(p.id, p); });
-      return Array.from(map.values()).sort((a, b) => {
-        const getMillis = (dateVal: any) => {
-          if (!dateVal) return 0;
-          if (dateVal instanceof Date) return dateVal.getTime();
-          if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
-          return new Date(dateVal).getTime() || 0;
-        };
-        return getMillis(b.createdAt) - getMillis(a.createdAt);
-      });
+    const map = new Map<string, FirestorePost>();
+    currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
+    firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
+    
+    const sorted = Array.from(map.values()).sort((a, b) => {
+      const getMillis = (dateVal: any) => {
+        if (!dateVal) return 0;
+        if (dateVal instanceof Date) return dateVal.getTime();
+        if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
+        return new Date(dateVal).getTime() || 0;
+      };
+      return getMillis(b.createdAt) - getMillis(a.createdAt);
     });
+    setPosts(sorted);
+    setLoading(false);
   };
 
   useEffect(() => {
     setLoading(true);
     const unsubscribe = subscribeToPosts((allPosts) => {
-      setPosts(allPosts);
-      setLoading(false);
+      latestFirestorePosts.current = allPosts;
+      mergeAndSetPosts(allPosts);
     });
 
     const handleAutoUpdate = () => {
-      fetchPostsManually();
+      mergeAndSetPosts(latestFirestorePosts.current);
     };
 
     window.addEventListener('career_log_data_updated', handleAutoUpdate);
@@ -87,7 +89,7 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
 
   function handlePostCreated() {
     setShowModal(false);
-    fetchPostsManually();
+    mergeAndSetPosts(latestFirestorePosts.current);
     onUpdate();
   }
 

@@ -149,18 +149,23 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       return;
     }
     if (!currentUser) return;
-    await updateUserProfile(currentUser.uid, {
-      name: editForm.name.trim(),
-      university: editForm.university.trim(),
-      grade: editForm.grade.trim(),
-      avatar: editForm.avatar,
-      targetIndustry: editForm.targetIndustry.trim(),
-      bio: editForm.bio.trim(),
-      profileVisibility: editForm.profileVisibility,
-    });
-    setEditing(false);
-    onUpdate();
-    onToast?.('プロフィール情報を更新しました', 'success');
+    try {
+      await updateUserProfile(currentUser.uid, {
+        name: editForm.name.trim(),
+        university: editForm.university.trim(),
+        grade: editForm.grade.trim(),
+        avatar: editForm.avatar,
+        targetIndustry: editForm.targetIndustry.trim(),
+        bio: editForm.bio.trim(),
+        profileVisibility: editForm.profileVisibility,
+      });
+      setEditing(false);
+      onUpdate();
+      onToast?.('プロフィール情報を更新しました', 'success');
+    } catch (e) {
+      console.error(e);
+      onToast?.('プロフィールの保存に失敗しました', 'error');
+    }
   }
 
   // 画像調整モーダル用ステート
