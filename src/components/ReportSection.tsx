@@ -134,7 +134,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       unsubEvents();
       unsubGoal();
     };
-  }, [currentUser]);
+  }, [currentUser, targetUid, isOwnReport]);
 
   // Modal states
   const [showAddCountdown, setShowAddCountdown] = useState(false);
