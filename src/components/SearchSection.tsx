@@ -3,11 +3,12 @@ import { Search, X, UserPlus, UserCheck } from 'lucide-react';
 import { CATEGORIES, INTERVIEW_SUB_TAGS } from '../db/mockData';
 import {
   searchUsersFirestore,
-  isFollowingFirestore,
   sendFollowRequest,
   unfollowUser,
   subscribeToPosts,
   subscribeToUserProfile,
+  subscribeToFollowingState,
+  subscribeToFollowRequestState,
   type UserProfile,
   type FirestorePost,
 } from '../db/firestore';
@@ -172,13 +173,20 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile;
 
   useEffect(() => {
     if (!currentUser) return;
-    isFollowingFirestore(currentUser.uid, user.id).then((res) => {
-      setFollowing(res);
+    const unsubFollowing = subscribeToFollowingState(currentUser.uid, user.id, (isFollowing) => {
+      setFollowing(isFollowing);
     });
-    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile: UserProfile | null) => {
+    const unsubRequest = subscribeToFollowRequestState(currentUser.uid, user.id, (isPending) => {
+      setRequestSent(isPending);
+    });
+    const unsubProfile = subscribeToUserProfile(currentUser.uid, (profile: UserProfile | null) => {
       setMyProfile(profile);
     });
-    return () => unsubscribe();
+    return () => {
+      unsubFollowing();
+      unsubRequest();
+      unsubProfile();
+    };
   }, [currentUser, user.id]);
 
   async function handleFollowClick() {

@@ -322,6 +322,50 @@ export async function isFollowingFirestore(
   return snap.exists();
 }
 
+/** 自分が特定ユーザーをフォロー済みかリアルタイム監視 */
+export function subscribeToFollowingState(
+  myUid: string,
+  targetUid: string,
+  callback: (isFollowing: boolean) => void
+) {
+  if (!myUid || !targetUid) {
+    callback(false);
+    return () => {};
+  }
+  
+  const followId = `${myUid}_${targetUid}`;
+  return onSnapshot(doc(db, 'follows', followId), (snap) => {
+    callback(snap.exists());
+  }, (err) => {
+    console.warn('Failed to subscribe following state:', err);
+    callback(false);
+  });
+}
+
+/** 特定ユーザーへの未承認フォローリクエストがあるかリアルタイム監視 */
+export function subscribeToFollowRequestState(
+  fromUid: string,
+  toUid: string,
+  callback: (isPending: boolean) => void
+) {
+  if (!fromUid || !toUid) {
+    callback(false);
+    return () => {};
+  }
+
+  return onSnapshot(doc(db, `users/${toUid}/followRequests`, fromUid), (snap) => {
+    if (snap.exists()) {
+      const data = snap.data();
+      callback(data.status === 'pending');
+    } else {
+      callback(false);
+    }
+  }, (err) => {
+    console.warn('Failed to subscribe follow request state:', err);
+    callback(false);
+  });
+}
+
 /** フォロー解除 */
 export async function unfollowUser(
   myUid: string,

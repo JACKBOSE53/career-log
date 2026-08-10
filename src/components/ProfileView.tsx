@@ -15,7 +15,8 @@ import {
   updateUserProfile,
   sendFollowRequest,
   unfollowUser,
-  isFollowingFirestore,
+  subscribeToFollowingState,
+  subscribeToFollowRequestState,
   type FirestorePost,
 } from '../db/firestore';
 import PostCard from './PostCard';
@@ -75,11 +76,7 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!user || !currentUser) return;
-    // Firestore側のフォロー状態を確認
-    isFollowingFirestore(currentUser.uid, userId).then((result) => {
-      setFollowing(result);
-    });
+    if (!user) return;
     setEditForm({
       name: user.name ?? '',
       university: user.university ?? '',
@@ -90,7 +87,21 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       bio: user.bio ?? '',
       profileVisibility: user.profileVisibility ?? 'public',
     });
-  }, [userId, user]);
+  }, [user]);
+
+  useEffect(() => {
+    if (!currentUser || !userId || isMe) return;
+    const unsubFollowing = subscribeToFollowingState(currentUser.uid, userId, (isFollowing) => {
+      setFollowing(isFollowing);
+    });
+    const unsubRequest = subscribeToFollowRequestState(currentUser.uid, userId, (isPending) => {
+      setRequestSent(isPending);
+    });
+    return () => {
+      unsubFollowing();
+      unsubRequest();
+    };
+  }, [currentUser, userId, isMe]);
 
   useEffect(() => {
     const unsubscribe = subscribeToUserPosts(userId, currentUser?.uid, following, (newPosts) => {

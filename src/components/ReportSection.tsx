@@ -23,6 +23,14 @@ import VerticalNumberPicker from './VerticalNumberPicker';
 
 import { getLocalDateStr, getMondayOfCurrentWeek } from '../utils/dateUtils';
 
+function safeGetDate(dateVal: any): Date {
+  if (!dateVal) return new Date();
+  if (dateVal instanceof Date) return dateVal;
+  if (typeof dateVal.toDate === 'function') return dateVal.toDate();
+  const parsed = new Date(dateVal);
+  return isNaN(parsed.getTime()) ? new Date() : parsed;
+}
+
 interface ReportSectionProps {
   onUpdate: () => void;
   onNavigateTimeline?: () => void;
@@ -199,7 +207,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   // 期間フィルター ('week' | 'month' | 'total') に応じた動的投稿抽出
   const filteredPosts = myPosts.filter((p) => {
     if (periodFilter === 'week') {
-      const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
+      const d = safeGetDate(p.createdAt);
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       return d >= sevenDaysAgo;
@@ -218,7 +226,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     today.setHours(0, 0, 0, 0);
 
     const sortedPostDates = myPosts
-      .map((p) => p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate())
+      .map((p) => safeGetDate(p.createdAt))
       .filter((d) => !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
 
@@ -253,7 +261,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   } else if (periodFilter === 'month') {
     const now = new Date();
     const sortedPostDates = myPosts
-      .map((p) => p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate())
+      .map((p) => safeGetDate(p.createdAt))
       .filter((d) => !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
 
@@ -339,7 +347,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
   // 今週の目標達成率
   const thisWeekPosts = myPosts.filter((p) => {
-    const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
+    const d = safeGetDate(p.createdAt);
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     return d >= sevenDaysAgo && (currentWeeklyTargetCategory === '全体' || p.category === currentWeeklyTargetCategory);
