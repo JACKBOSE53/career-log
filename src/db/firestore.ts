@@ -638,53 +638,105 @@ export function subscribeToUserPosts(
   const localUserPosts = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
   callback(localUserPosts);
 
-  let q;
   const postsCollection = collection(db, 'posts');
 
+  // 1. 自分の投稿を取得する場合：制限なくシンプルに全件購読
   if (userId === currentUserId) {
-    // 自分の投稿を取得する場合は、すべての公開範囲を安全に取得可能
-    q = query(
+    const q = query(
       postsCollection,
       where('userId', '==', userId),
       orderBy('createdAt', 'desc')
     );
-  } else {
-    // 他人の投稿を取得する場合は、セキュリティルール（visibility制限）に反しないよう、許可された公開範囲のみに制限してクエリする
-    const allowedVisibilities = isFollowingFriend
-      ? ['public', 'followers', null]
-      : ['public', null];
+    return onSnapshot(q, (snapshot) => {
+      const firestorePosts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        return { ...data, id: doc.id, createdAt: date };
+      }) as FirestorePost[];
 
-    q = query(
-      postsCollection,
-      where('userId', '==', userId),
-      where('visibility', 'in', allowedVisibilities),
-      orderBy('createdAt', 'desc')
-    );
+      const currentLocals = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
+      const map = new Map<string, FirestorePost>();
+      currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
+      firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
+
+      const merged = Array.from(map.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+      callback(merged);
+    }, (err) => {
+      console.warn('Firestore user posts subscribe error, using LocalStorage:', err);
+      callback(localUserPosts);
+    });
   }
 
-  return onSnapshot(q, (snapshot) => {
-    const firestorePosts = snapshot.docs.map(doc => {
-      const data = doc.data();
-      const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: date,
-      };
-    }) as FirestorePost[];
+  // 2. 他人の投稿を取得する場合：セキュリティルールを完全に満たすため、等価(==)クエリに分解して並列購読し、マージする
+  const unsubscribes: (() => void)[] = [];
+  const resultsMap = new Map<string, FirestorePost[]>();
 
-    const currentLocals = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
-    const map = new Map<string, FirestorePost>();
+  // 各クエリの結合・ソート処理
+  const triggerMerge = () => {
+    const allPostsMap = new Map<string, FirestorePost>();
+    
+    // 全サブクエリの結果をマージ
+    resultsMap.forEach((postsList) => {
+      postsList.forEach((p) => {
+        if (p.id) allPostsMap.set(p.id, p);
+      });
+    });
 
-    currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
-    firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
+    // ローカル一時投稿（もしあれば）もマージ
+    const currentLocals = getLocalPosts().filter((p) => p.userId === userId);
+    currentLocals.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
 
-    const merged = Array.from(map.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+    const merged = Array.from(allPostsMap.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
     callback(merged);
-  }, (err) => {
-    console.warn('Firestore user posts subscribe error, using LocalStorage:', err);
-    callback(localUserPosts);
-  });
+  };
+
+  // サブクエリを登録・実行するヘルパー
+  const runSubQuery = (key: string, queryObj: import('firebase/firestore').Query) => {
+    const unsub = onSnapshot(queryObj, (snapshot: import('firebase/firestore').QuerySnapshot) => {
+      const posts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        return { ...data, id: doc.id, createdAt: date };
+      }) as FirestorePost[];
+      
+      resultsMap.set(key, posts);
+      triggerMerge();
+    }, (err: Error) => {
+      console.warn(`Firestore user posts sub-query (${key}) error:`, err);
+    });
+    unsubscribes.push(unsub);
+  };
+
+  // サブクエリA: visibility == 'public'
+  const qPublic = query(
+    postsCollection,
+    where('userId', '==', userId),
+    where('visibility', '==', 'public')
+  );
+  runSubQuery('public', qPublic);
+
+  // サブクエリB: visibility == null
+  const qNull = query(
+    postsCollection,
+    where('userId', '==', userId),
+    where('visibility', '==', null)
+  );
+  runSubQuery('null', qNull);
+
+  // サブクエリC: visibility == 'followers' (フォロー中の場合のみ購読)
+  if (isFollowingFriend) {
+    const qFollowers = query(
+      postsCollection,
+      where('userId', '==', userId),
+      where('visibility', '==', 'followers')
+    );
+    runSubQuery('followers', qFollowers);
+  }
+
+  // 購読解除用クリーンアップ関数を返す
+  return () => {
+    unsubscribes.forEach((unsub) => unsub());
+  };
 }
 
 export async function toggleLikePost(postId: string, userId: string, currentlyLiked: boolean) {
