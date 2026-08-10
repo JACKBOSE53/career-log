@@ -4,60 +4,60 @@
 
 /* ── 1. CSS Variables ──────────────────────────────────────── */
 :root {
-  /* Brand Colors — Human-Warm Organic Terracotta (Non-AI, Earth & Craft Feel) */
-  --color-primary: #E06D53;
-  --color-primary-light: #F08A71;
-  --color-primary-dark: #C4533A;
-  --color-primary-glow: rgba(224, 109, 83, 0.18);
+  /* Brand Colors — Energetic Modern Warm Orange (Beautiful on light mode) */
+  --color-primary: #EA580C;
+  --color-primary-light: #F97316;
+  --color-primary-dark: #C2410C;
+  --color-primary-glow: rgba(234, 88, 12, 0.12);
 
-  /* Gradients — Natural Organic Tones */
-  --gradient-primary: linear-gradient(135deg, #C4533A 0%, #E06D53 100%);
-  --gradient-accent: linear-gradient(135deg, #1E293B 0%, #334155 100%);
-  --gradient-warm: linear-gradient(135deg, #E06D53 0%, #D97724 100%);
-  --gradient-card: linear-gradient(145deg, #141C2B 0%, #0B0F17 100%);
+  /* Gradients — Bright & Fresh Clean Tones */
+  --gradient-primary: linear-gradient(135deg, #EA580C 0%, #F97316 100%);
+  --gradient-accent: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+  --gradient-warm: linear-gradient(135deg, #F97316 0%, #FBBF24 100%);
+  --gradient-card: linear-gradient(145deg, #FFFFFF 0%, #F8FAFC 100%);
 
-  /* Background — Full Deep Dark Mode */
-  --bg-base: #0B0F17;
-  --bg-surface: #141C2B;
-  --bg-surface-2: #1E293B;
-  --bg-surface-hover: #2B3952;
-  --bg-glass: rgba(20, 28, 43, 0.95);
+  /* Background — Pure White & Soft Slate Light Theme */
+  --bg-base: #F8FAFC;
+  --bg-surface: #FFFFFF;
+  --bg-surface-2: #F1F5F9;
+  --bg-surface-hover: #E2E8F0;
+  --bg-glass: rgba(255, 255, 255, 0.92);
   --bg-glass-blur: blur(20px);
 
-  /* Text — Crisp White & Slate */
-  --text-primary: #F8FAFC;
-  --text-secondary: #CBD5E1;
-  --text-muted: #94A3B8;
+  /* Text — Deep Indigo-Slate & Clean Charcoal */
+  --text-primary: #0F172A;
+  --text-secondary: #334155;
+  --text-muted: #64748B;
   --text-white: #FFFFFF;
   --text-link: var(--color-primary);
 
-  /* Border — Dark Slate Borders */
-  --border-color: #26334D;
+  /* Border — Soft Light Borders */
+  --border-color: #E2E8F0;
   --border-color-focus: var(--color-primary);
   --border-radius-sm: 8px;
   --border-radius-md: 16px;
   --border-radius-lg: 24px;
   --border-radius-full: 9999px;
 
-  /* Shadow — Subtle Dark Glows */
-  --shadow-xs: 0 1px 3px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
-  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
-  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.7);
-  --shadow-glow: 0 0 20px rgba(56, 189, 248, 0.2);
-  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.3);
+  /* Shadow — Soft Premium Shadows (No dark glows) */
+  --shadow-xs: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 6px 16px rgba(15, 23, 42, 0.06);
+  --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.07);
+  --shadow-xl: 0 20px 48px rgba(15, 23, 42, 0.08);
+  --shadow-glow: 0 0 24px rgba(234, 88, 12, 0.15);
+  --shadow-card: 0 4px 20px rgba(15, 23, 42, 0.04);
 
-  /* Category Colors */
-  --color-es: #3B82F6;
-  --color-spi: #8B5CF6;
-  --color-interview: #EF4444;
-  --color-ob: #F59E0B;
-  --color-info: #10B981;
-  --color-analysis: #6366F1;
-  --color-gd: #EC4899;
-  --color-intern: #F97316;
-  --color-other: #64748B;
+  /* Category Colors (Perfected contrast for light background) */
+  --color-es: #2563EB;
+  --color-spi: #7C3AED;
+  --color-interview: #DC2626;
+  --color-ob: #D97706;
+  --color-info: #059669;
+  --color-analysis: #4F46E5;
+  --color-gd: #DB2777;
+  --color-intern: #EA580C;
+  --color-other: #4B5563;
 
   /* Spacing */
   --space-1: 4px;
