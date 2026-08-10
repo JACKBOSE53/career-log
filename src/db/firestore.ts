@@ -78,7 +78,7 @@ export async function sendFollowRequest(
   toUid: string,
   fromName?: string,
   fromAvatar?: string,
-): Promise<{ directlyFollowed: boolean }> {
+): Promise<{ directlyFollowed: boolean; error?: string }> {
   if (fromUid === toUid) return { directlyFollowed: false };
 
   // 送信者の名前・アバターをFirestoreのユーザー文書から直接取得
@@ -142,6 +142,7 @@ export async function sendFollowRequest(
       return { directlyFollowed: true };
     } catch (e) {
       console.error('Direct follow failed, falling back to follow request:', e);
+      return { directlyFollowed: false, error: (e as Error).message };
     }
   }
 

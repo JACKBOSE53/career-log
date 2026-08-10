@@ -129,8 +129,12 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
         setFollowing(true);
         onToast?.('フォローしました！', 'success');
       } else {
-        setRequestSent(true);
-        onToast?.('フォローリクエストを送信しました！', 'success');
+        if (res.error) {
+          onToast?.('直接フォロー失敗: ' + res.error, 'error');
+        } else {
+          setRequestSent(true);
+          onToast?.('フォローリクエストを送信しました！', 'success');
+        }
       }
       onUpdate();
     } catch (e) {

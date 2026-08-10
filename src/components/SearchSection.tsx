@@ -205,7 +205,12 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile;
         if (res.directlyFollowed) {
           setFollowing(true);
         } else {
-          setRequestSent(true);
+          if (res.error) {
+            console.error('Direct follow failed:', res.error);
+            alert('直接フォロー失敗: ' + res.error);
+          } else {
+            setRequestSent(true);
+          }
         }
       } finally {
         setLoading(false);
