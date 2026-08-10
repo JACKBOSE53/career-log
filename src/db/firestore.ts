@@ -800,12 +800,21 @@ export function subscribeToComments(postId: string, callback: (comments: Firesto
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 // FirestoreのTimestamp型を文字列に変換（UI表示用）
-export function formatFirestoreDate(date: Date | Timestamp): string {
-  const d = date instanceof Date ? date : date.toDate();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+export function formatFirestoreDate(date: any): string {
+  if (!date) return '';
+  try {
+    const d = date instanceof Date 
+      ? date 
+      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
+    if (isNaN(d.getTime())) return '';
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  } catch (e) {
+    console.warn('formatFirestoreDate error:', e);
+    return '';
+  }
 }
 
 // ─── Calendar Events ──────────────────────────────────────────────────────────
