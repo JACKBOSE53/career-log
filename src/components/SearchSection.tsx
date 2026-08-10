@@ -232,6 +232,10 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile;
             <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{user.name}</div>
           </button>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.university || '大学未設定'} · {user.grade || '26卒'}</div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+            <span style={{ marginRight: 8 }}><strong style={{ color: 'var(--text-primary)' }}>{(user.followingCount || 0).toLocaleString()}</strong> フォロー</span>
+            <span><strong style={{ color: 'var(--text-primary)' }}>{(user.followersCount || 0).toLocaleString()}</strong> フォロワー</span>
+          </div>
         </div>
 
         {currentUser?.uid !== user.id && (

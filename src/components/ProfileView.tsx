@@ -517,10 +517,18 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
 
             {/* 公開情報: 大学・学年・志望業界タグ */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 10 }}>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 14, alignItems: 'center' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.875rem', color: 'var(--text-secondary)', fontWeight: 600 }}>
                   <GraduationCap size={16} color="var(--color-primary)" />
                   {user.university || '大学未設定'}・{user.grade || '学年未設定'}
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8125rem', marginLeft: 4 }}>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{(user.followingCount || 0).toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロー中</span>
+                  </span>
+                  <span style={{ color: 'var(--text-secondary)' }}>
+                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{(user.followersCount || 0).toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロワー</span>
+                  </span>
                 </span>
               </div>
               {user.targetIndustry && (
