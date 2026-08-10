@@ -6,7 +6,6 @@ import Timeline from './components/Timeline';
 
 import CalendarSection from './components/CalendarSection';
 import SearchSection from './components/SearchSection';
-import CommunitySection from './components/CommunitySection';
 import NotificationSection from './components/NotificationSection';
 import ProfileView from './components/ProfileView';
 import CreatePostModal from './components/CreatePostModal';
@@ -137,9 +136,6 @@ export default function App() {
             />
           )}
 
-          {currentPage === 'communities' && (
-            <CommunitySection onUpdate={handleUpdate} />
-          )}
 
           {currentPage === 'notifications' && (
             <NotificationSection

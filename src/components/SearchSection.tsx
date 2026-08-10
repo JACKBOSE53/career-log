@@ -6,12 +6,10 @@ import {
   isFollowingFirestore,
   sendFollowRequest,
   unfollowUser,
-  subscribeToCommunities,
   subscribeToPosts,
   subscribeToUserProfile,
   type UserProfile,
   type FirestorePost,
-  type FirestoreCommunity,
 } from '../db/firestore';
 import { useAuth } from '../contexts/AuthContext';
 import PostCard from './PostCard';
@@ -25,16 +23,13 @@ interface SearchSectionProps {
 export default function SearchSection({ onUpdate, onProfileClick }: SearchSectionProps) {
   const [query, setQuery] = useState('');
   const [allPosts, setAllPosts] = useState<FirestorePost[]>([]);
-  const [allCommunities, setAllCommunities] = useState<FirestoreCommunity[]>([]);
-  const [results, setResults] = useState<{ posts: FirestorePost[]; users: UserProfile[]; communities: FirestoreCommunity[] } | null>(null);
-  const [tab, setTab] = useState<'posts' | 'users' | 'companies'>('posts');
+  const [results, setResults] = useState<{ posts: FirestorePost[]; users: UserProfile[] } | null>(null);
+  const [tab, setTab] = useState<'posts' | 'users'>('posts');
 
   useEffect(() => {
     const unsubPosts = subscribeToPosts(setAllPosts);
-    const unsubComm = subscribeToCommunities(setAllCommunities);
     return () => {
       unsubPosts();
-      unsubComm();
     };
   }, []);
 
@@ -49,14 +44,10 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
     const matchedPosts = allPosts.filter(
       (p) => p.title.includes(cleanQ) || p.content.includes(cleanQ)
     );
-    const matchedComm = allCommunities.filter(
-      (c) => c.name.includes(cleanQ) || c.description.includes(cleanQ)
-    );
     
     setResults({
       posts: matchedPosts,
       users: firestoreUsers,
-      communities: matchedComm,
     });
   }
 
@@ -150,9 +141,6 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
             <button className={`tab-item ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
               ユーザー {results.users.length > 0 && <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>{results.users.length}</span>}
             </button>
-            <button className={`tab-item ${tab === 'companies' ? 'active' : ''}`} onClick={() => setTab('companies')}>
-              企業・コミュニティ {results.communities.length > 0 && <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>{results.communities.length}</span>}
-            </button>
           </div>
 
           {tab === 'posts' && (
@@ -167,12 +155,6 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
             results.users.length === 0
               ? <div className="empty-state"><span className="empty-state-icon"></span><p className="empty-state-title">「{query}」に関連するユーザーが見つかりませんでした</p></div>
               : results.users.map((user) => <UserSearchCard key={user.id} user={user} onProfileClick={onProfileClick} onUpdate={onUpdate} />)
-          )}
-
-          {tab === 'companies' && (
-            results.communities.length === 0
-              ? <div className="empty-state"><span className="empty-state-icon">🏢</span><p className="empty-state-title">「{query}」に関連する企業・コミュニティが見つかりませんでした</p></div>
-              : results.communities.map((comm) => <CommunitySearchCard key={comm.id} community={comm} />)
           )}
         </div>
       )}
@@ -307,22 +289,5 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile;
         </div>
       )}
     </>
-  );
-}
-
-function CommunitySearchCard({ community }: { community: FirestoreCommunity }) {
-  const TYPE_LABELS: Record<string, string> = { university: '大学', industry: '業界', company: '企業', event: 'イベント' };
-  return (
-    <div className="card" style={{ padding: 16, marginBottom: 10 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-        <div style={{ width: 44, height: 44, borderRadius: 12, background: `${community.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', border: `1px solid ${community.color}30`, flexShrink: 0 }}>
-          {community.emoji}
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{community.name}</div>
-          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{community.memberCount.toLocaleString()}人 · {TYPE_LABELS[community.type]}</div>
-        </div>
-      </div>
-    </div>
   );
 }
