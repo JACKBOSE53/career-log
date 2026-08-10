@@ -1,7 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Users, MessageSquare, ChevronRight, Lock, Plus, X, Globe, UserCheck, Shield } from 'lucide-react';
-import { getAllCommunities, getJoinedCommunities, getCurrentUser, createCommunity } from '../db/store';
-import type { Community } from '../db/mockData';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  subscribeToCommunities,
+  createCommunityFirestore,
+  subscribeToUserProfile,
+  type FirestoreCommunity
+} from '../db/firestore';
 import CommunityChatModal from './CommunityChatModal';
 
 interface CommunitySectionProps {
@@ -16,12 +21,12 @@ const TYPE_LABELS: Record<string, string> = {
 };
 
 export default function CommunitySection({ onUpdate }: CommunitySectionProps) {
-  // メインひろばタブ: 'public' (みんなのひろば) | 'private' (私のひろば)
+  const { currentUser } = useAuth();
   const [mainTab, setMainTab] = useState<'public' | 'private'>('public');
-  const [selectedCommunity, setSelectedCommunity] = useState<Community | null>(null);
-  const me = getCurrentUser();
+  const [selectedCommunity, setSelectedCommunity] = useState<FirestoreCommunity | null>(null);
+  const [me, setMe] = useState<any>(null);
 
-  // コミュニティ作成モーダル用State
+  const [communities, setCommunities] = useState<FirestoreCommunity[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -30,36 +35,53 @@ export default function CommunitySection({ onUpdate }: CommunitySectionProps) {
   const [iconText, setIconText] = useState('ルーム');
   const [allowedUniv, setAllowedUniv] = useState('');
 
-  const communities = getAllCommunities();
-  const joinedIds = getJoinedCommunities();
+  useEffect(() => {
+    const unsubscribe = subscribeToCommunities((list) => {
+      setCommunities(list);
+    });
+    return () => unsubscribe();
+  }, []);
 
-  // ひろば別のコミュニティ抽出
-  const publicRooms = communities.filter((c) => !c.isPrivate); // みんなのひろば (オープン)
-  const myRooms = communities.filter((c) => c.isPrivate || c.createdBy === me.id || joinedIds.includes(c.id)); // 私のひろば (自作・招待・参加中)
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile) => {
+      setMe(profile);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  const publicRooms = communities.filter((c) => !c.isPrivate);
+  const myRooms = communities.filter(
+    (c) => c.isPrivate || c.createdBy === currentUser?.uid || c.memberIds?.includes(currentUser?.uid || '')
+  );
 
   const activeRooms = mainTab === 'public' ? publicRooms : myRooms;
 
-  function handleOpenChat(comm: Community) {
+  function handleOpenChat(comm: FirestoreCommunity) {
     setSelectedCommunity(comm);
   }
 
-  function handleCreateCommunity() {
-    if (!name.trim() || !description.trim()) return;
-    const newComm = createCommunity({
-      name: name.trim(),
-      description: description.trim(),
-      type: commType,
-      emoji: iconText.substring(0, 4) || 'R',
-      color: isPrivateRoom ? '#7C3AED' : '#0F172A',
-      allowedUniversity: allowedUniv.trim() || undefined,
-      isPrivate: isPrivateRoom,
-      createdBy: me.id,
-    });
-    setShowCreateModal(false);
-    setName('');
-    setDescription('');
-    onUpdate();
-    setSelectedCommunity(newComm);
+  async function handleCreateCommunity() {
+    if (!name.trim() || !description.trim() || !currentUser) return;
+    try {
+      const newComm = await createCommunityFirestore({
+        name: name.trim(),
+        description: description.trim(),
+        type: commType,
+        emoji: iconText.substring(0, 4) || 'R',
+        color: isPrivateRoom ? '#7C3AED' : '#0F172A',
+        allowedUniversity: allowedUniv.trim() || undefined,
+        isPrivate: isPrivateRoom,
+        createdBy: currentUser.uid,
+      });
+      setShowCreateModal(false);
+      setName('');
+      setDescription('');
+      onUpdate();
+      setSelectedCommunity(newComm);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   return (
@@ -151,9 +173,9 @@ export default function CommunitySection({ onUpdate }: CommunitySectionProps) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {activeRooms.map((comm) => {
-            const joined = joinedIds.includes(comm.id);
+            const joined = comm.memberIds?.includes(currentUser?.uid || '');
             const isRestricted = Boolean(comm.allowedUniversity);
-            const isAllowed = !isRestricted || me.university === comm.allowedUniversity;
+            const isAllowed = !isRestricted || me?.university === comm.allowedUniversity;
 
             return (
               <div

@@ -18,6 +18,7 @@ const NAV_ITEMS = [
   { id: 'home' as Page, label: 'タイムライン', icon: Home },
   { id: 'calendar' as Page, label: 'カレンダー', icon: Calendar },
   { id: 'search' as Page, label: 'さがす', icon: Search },
+  { id: 'communities' as Page, label: 'チャットひろば', icon: Users },
   { id: 'notifications' as Page, label: '通知', icon: Bell },
   { id: 'profile' as Page, label: 'マイページ', icon: User },
 ];

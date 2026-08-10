@@ -1,60 +1,89 @@
 import { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, Send, Lock, Users, Check, AlertTriangle } from 'lucide-react';
-import type { Community, CommunityMessage } from '../db/mockData';
+import { useAuth } from '../contexts/AuthContext';
+import { useUserProfile } from '../hooks/useUserProfile';
 import {
-  getCurrentUser, getUserById, getCommunityMessages, addCommunityMessage,
-  isJoinedCommunity, toggleJoinCommunity,
-} from '../db/store';
+  subscribeToCommunityMessages,
+  sendCommunityMessageFirestore,
+  joinCommunityFirestore,
+  leaveCommunityFirestore,
+  subscribeToUserProfile,
+  type FirestoreCommunity,
+  type FirestoreCommunityMessage
+} from '../db/firestore';
 
 interface CommunityChatModalProps {
-  community: Community;
+  community: FirestoreCommunity;
   onClose: () => void;
   onUpdate: () => void;
 }
 
-function timeAgo(dateStr: string): string {
-  const date = new Date(dateStr);
+function timeAgo(dateVal: any): string {
+  const date = dateVal instanceof Date ? dateVal : new Date(dateVal);
   return date.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' });
 }
 
 export default function CommunityChatModal({ community, onClose, onUpdate }: CommunityChatModalProps) {
-  const me = getCurrentUser();
-  const [messages, setMessages] = useState<CommunityMessage[]>([]);
+  const { currentUser } = useAuth();
+  const [me, setMe] = useState<any>(null);
+  const [messages, setMessages] = useState<FirestoreCommunityMessage[]>([]);
   const [inputText, setInputText] = useState('');
-  const [isJoined, setIsJoined] = useState(() => isJoinedCommunity(community.id));
+  const [isJoined, setIsJoined] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 大学限定アクセス判定
   const isUniversityRestricted = Boolean(community.allowedUniversity);
-  const isAllowed = !isUniversityRestricted || me.university === community.allowedUniversity;
-
-  function refreshMessages() {
-    setMessages(getCommunityMessages(community.id));
-  }
+  const isAllowed = !isUniversityRestricted || me?.university === community.allowedUniversity;
 
   useEffect(() => {
-    refreshMessages();
-    // Scroll to bottom
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
-  }, [community.id]);
+    if (!currentUser) return;
+    setIsJoined(community.memberIds?.includes(currentUser.uid) || false);
 
-  function handleJoinToggle() {
-    const result = toggleJoinCommunity(community.id);
-    setIsJoined(result);
-    onUpdate();
+    const unsubscribeProfile = subscribeToUserProfile(currentUser.uid, (profile) => {
+      setMe(profile);
+    });
+
+    const unsubscribeMessages = subscribeToCommunityMessages(community.id, (fetchedMessages) => {
+      setMessages(fetchedMessages);
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    });
+
+    return () => {
+      unsubscribeProfile();
+      unsubscribeMessages();
+    };
+  }, [community.id, currentUser]);
+
+  async function handleJoinToggle() {
+    if (!currentUser) return;
+    try {
+      if (isJoined) {
+        await leaveCommunityFirestore(community.id, currentUser.uid);
+        setIsJoined(false);
+      } else {
+        await joinCommunityFirestore(community.id, currentUser.uid);
+        setIsJoined(true);
+      }
+      onUpdate();
+    } catch (e) {
+      console.error(e);
+    }
   }
 
-  function handleSend() {
-    if (!inputText.trim() || !isAllowed) return;
-    addCommunityMessage(community.id, inputText.trim());
-    setInputText('');
-    refreshMessages();
-    onUpdate();
-    setTimeout(() => {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }, 100);
+  async function handleSend() {
+    if (!inputText.trim() || !isAllowed || !currentUser) return;
+    try {
+      await sendCommunityMessageFirestore(community.id, currentUser.uid, inputText.trim());
+      setInputText('');
+      onUpdate();
+      setTimeout(() => {
+        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 100);
+    } catch (e) {
+      console.error(e);
+    }
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -118,11 +147,10 @@ export default function CommunityChatModal({ community, onClose, onUpdate }: Com
                 )}
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Users size={12} /> {community.memberCount + (isJoined ? 1 : 0)} メンバー
+                <Users size={12} /> {(community.memberIds?.length || 1) + (isJoined && !community.memberIds?.includes(currentUser?.uid || '') ? 1 : 0)} メンバー
               </div>
             </div>
 
-            {/*  グループアイコンの右側（ヘッダー右）に参加するボタン  */}
             <button
               onClick={handleJoinToggle}
               style={{
@@ -156,7 +184,7 @@ export default function CommunityChatModal({ community, onClose, onUpdate }: Com
             <AlertTriangle size={18} color="#EF4444" style={{ flexShrink: 0 }} />
             <div style={{ fontSize: '0.8rem', color: '#991B1B', lineHeight: 1.4 }}>
               <strong>【{community.allowedUniversity} 学生限定チャット】</strong><br />
-              あなたの設定大学: <strong>{me.university || '未設定'}</strong>。このコミュニティは{community.allowedUniversity}のメンバーのみ参加・投稿が可能です。
+              あなたの設定大学: <strong>{me?.university || '未設定'}</strong>。このコミュニティは{community.allowedUniversity}のメンバーのみ参加・投稿が可能です。
             </div>
           </div>
         )}
@@ -185,60 +213,14 @@ export default function CommunityChatModal({ community, onClose, onUpdate }: Com
               まだメッセージがありません。最初の発言をしてみよう！
             </div>
           ) : (
-            messages.map((msg) => {
-              const isMine = msg.userId === me.id;
-              const sender = getUserById(msg.userId);
-
-              return (
-                <div
-                  key={msg.id}
-                  style={{
-                    display: 'flex', gap: 8,
-                    flexDirection: isMine ? 'row-reverse' : 'row',
-                    alignItems: 'flex-end',
-                  }}
-                >
-                  {/* Sender avatar */}
-                  {!isMine && (
-                    <div style={{
-                      width: 32, height: 32, borderRadius: '50%',
-                      background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: '0.9rem', color: 'white', flexShrink: 0,
-                    }}>
-                      {sender?.avatar || ''}
-                    </div>
-                  )}
-
-                  {/* Message Bubble */}
-                  <div style={{ maxWidth: '75%' }}>
-                    {!isMine && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2, marginLeft: 2 }}>
-                        {sender?.name || '匿名'}・{sender?.university || ''}
-                      </div>
-                    )}
-                    <div style={{
-                      padding: '10px 14px',
-                      borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
-                      background: isMine ? 'var(--gradient-primary)' : 'var(--bg-surface-2)',
-                      color: isMine ? 'white' : 'var(--text-primary)',
-                      border: isMine ? 'none' : '1px solid var(--border-color)',
-                      boxShadow: isMine ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.2)',
-                      fontSize: '0.875rem', lineHeight: 1.5,
-                      wordBreak: 'break-word',
-                    }}>
-                      {msg.content}
-                    </div>
-                    <div style={{
-                      fontSize: '0.62rem', color: 'var(--text-muted)',
-                      marginTop: 2, textAlign: isMine ? 'right' : 'left', padding: '0 2px',
-                    }}>
-                      {timeAgo(msg.createdAt)}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
+            messages.map((msg) => (
+              <CommunityMessageItem
+                key={msg.id || msg.createdAt.toString()}
+                msg={msg}
+                myId={currentUser?.uid || ''}
+                timeAgo={timeAgo}
+              />
+            ))
           )}
           <div ref={messagesEndRef} />
         </div>
@@ -277,6 +259,62 @@ export default function CommunityChatModal({ community, onClose, onUpdate }: Com
               <Lock size={14} /> 所属大学限定のためメッセージ送信できません
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommunityMessageItem({ msg, myId, timeAgo }: { msg: FirestoreCommunityMessage; myId: string; timeAgo: (d: any) => string }) {
+  const { profile: sender, loading } = useUserProfile(msg.userId);
+  const isMine = msg.userId === myId;
+
+  if (loading) return null;
+
+  return (
+    <div
+      style={{
+        display: 'flex', gap: 8,
+        flexDirection: isMine ? 'row-reverse' : 'row',
+        alignItems: 'flex-end',
+      }}
+    >
+      {/* Sender avatar */}
+      {!isMine && (
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%',
+          background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '0.9rem', color: 'white', flexShrink: 0,
+        }}>
+          {sender?.avatar || '👤'}
+        </div>
+      )}
+
+      {/* Message Bubble */}
+      <div style={{ maxWidth: '75%', minWidth: 0 }}>
+        {!isMine && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2, marginLeft: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {sender?.name || '匿名'}・{sender?.university || ''}
+          </div>
+        )}
+        <div style={{
+          padding: '10px 14px',
+          borderRadius: isMine ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+          background: isMine ? 'var(--gradient-primary)' : 'var(--bg-surface-2)',
+          color: isMine ? 'white' : 'var(--text-primary)',
+          border: isMine ? 'none' : '1px solid var(--border-color)',
+          boxShadow: isMine ? '0 2px 8px rgba(0,0,0,0.3)' : '0 1px 3px rgba(0,0,0,0.2)',
+          fontSize: '0.875rem', lineHeight: 1.5,
+          wordBreak: 'break-word',
+        }}>
+          {msg.content}
+        </div>
+        <div style={{
+          fontSize: '0.62rem', color: 'var(--text-muted)',
+          marginTop: 2, textAlign: isMine ? 'right' : 'left', padding: '0 2px',
+        }}>
+          {timeAgo(msg.createdAt)}
         </div>
       </div>
     </div>

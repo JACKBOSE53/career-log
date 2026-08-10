@@ -1,17 +1,19 @@
 import { useState, useEffect } from 'react';
 import { Search, X, UserPlus, UserCheck } from 'lucide-react';
-import { searchAll, isFollowing } from '../db/store';
 import { CATEGORIES, INTERVIEW_SUB_TAGS } from '../db/mockData';
-import type { Post, User, Community } from '../db/mockData';
 import {
   searchUsersFirestore,
   isFollowingFirestore,
   sendFollowRequest,
   unfollowUser,
+  subscribeToCommunities,
+  subscribeToPosts,
+  subscribeToUserProfile,
   type UserProfile,
+  type FirestorePost,
+  type FirestoreCommunity,
 } from '../db/firestore';
 import { useAuth } from '../contexts/AuthContext';
-
 import PostCard from './PostCard';
 import CategoryBadge from './CategoryBadge';
 
@@ -22,8 +24,19 @@ interface SearchSectionProps {
 
 export default function SearchSection({ onUpdate, onProfileClick }: SearchSectionProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ posts: Post[]; users: (User | UserProfile)[]; communities: Community[] } | null>(null);
+  const [allPosts, setAllPosts] = useState<FirestorePost[]>([]);
+  const [allCommunities, setAllCommunities] = useState<FirestoreCommunity[]>([]);
+  const [results, setResults] = useState<{ posts: FirestorePost[]; users: UserProfile[]; communities: FirestoreCommunity[] } | null>(null);
   const [tab, setTab] = useState<'posts' | 'users' | 'companies'>('posts');
+
+  useEffect(() => {
+    const unsubPosts = subscribeToPosts(setAllPosts);
+    const unsubComm = subscribeToCommunities(setAllCommunities);
+    return () => {
+      unsubPosts();
+      unsubComm();
+    };
+  }, []);
 
   async function handleSearch(q: string) {
     setQuery(q);
@@ -31,18 +44,19 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
       setResults(null);
       return;
     }
-    const mockRes = searchAll(q.trim());
-    const firestoreUsers = await searchUsersFirestore(q.trim());
+    const cleanQ = q.trim();
+    const firestoreUsers = await searchUsersFirestore(cleanQ);
+    const matchedPosts = allPosts.filter(
+      (p) => p.title.includes(cleanQ) || p.content.includes(cleanQ)
+    );
+    const matchedComm = allCommunities.filter(
+      (c) => c.name.includes(cleanQ) || c.description.includes(cleanQ)
+    );
     
-    // 重複を除去して結合
-    const userMap = new Map<string, User | UserProfile>();
-    firestoreUsers.forEach((u) => userMap.set(u.id, u));
-    mockRes.users.forEach((u) => { if (!userMap.has(u.id)) userMap.set(u.id, u); });
-
     setResults({
-      posts: mockRes.posts,
-      users: Array.from(userMap.values()),
-      communities: mockRes.communities,
+      posts: matchedPosts,
+      users: firestoreUsers,
+      communities: matchedComm,
     });
   }
 
@@ -166,8 +180,9 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
   );
 }
 
-function UserSearchCard({ user, onProfileClick, onUpdate }: { user: User | UserProfile; onProfileClick: (id: string) => void; onUpdate: () => void }) {
-  const { currentUser, profile: myProfile } = useAuth();
+function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile; onProfileClick: (id: string) => void; onUpdate: () => void }) {
+  const { currentUser } = useAuth();
+  const [myProfile, setMyProfile] = useState<UserProfile | null>(null);
   const [following, setFollowing] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -176,8 +191,12 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: User | UserP
   useEffect(() => {
     if (!currentUser) return;
     isFollowingFirestore(currentUser.uid, user.id).then((res) => {
-      setFollowing(res || isFollowing(user.id));
+      setFollowing(res);
     });
+    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile: UserProfile | null) => {
+      setMyProfile(profile);
+    });
+    return () => unsubscribe();
   }, [currentUser, user.id]);
 
   async function handleFollowClick() {
@@ -291,7 +310,7 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: User | UserP
   );
 }
 
-function CommunitySearchCard({ community }: { community: Community }) {
+function CommunitySearchCard({ community }: { community: FirestoreCommunity }) {
   const TYPE_LABELS: Record<string, string> = { university: '大学', industry: '業界', company: '企業', event: 'イベント' };
   return (
     <div className="card" style={{ padding: 16, marginBottom: 10 }}>

@@ -70,6 +70,15 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+    // ─── communities コレクション ──────────────────────────────────────
+    match /communities/{communityId} {
+      allow read, write: if isSignedIn();
+
+      match /messages/{messageId} {
+        allow read, write: if isSignedIn();
+      }
+    }
+
     // ─── followRequests コレクション ──────────────────────────────────
     match /followRequests/{requestId} {
       allow read: if isSignedIn() && (
