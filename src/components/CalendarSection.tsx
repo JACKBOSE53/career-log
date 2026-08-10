@@ -3,9 +3,20 @@ import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
   Clock, Trash2, X, AlertCircle, CheckCircle2, MapPin, Bell,
 } from 'lucide-react';
-import { getCountdowns, addCountdown, deleteCountdown, getPostsByUser, getCurrentUserId, checkAndGenerateReminderNotifications } from '../db/store';
-import type { CountdownEvent } from '../db/mockData';
+import { useAuth } from '../contexts/AuthContext';
+import {
+  subscribeToUserPosts,
+  subscribeToCalendarEvents,
+  addCalendarEvent,
+  deleteCalendarEvent,
+  formatFirestoreDate,
+  type FirestorePost,
+  type FirestoreCalendarEvent,
+} from '../db/firestore';
+import { CATEGORIES, INTERVIEW_SUB_TAGS, type CountdownEvent } from '../db/mockData';
 import VerticalTimePicker from './VerticalTimePicker';
+
+import { getLocalDateStr } from '../utils/dateUtils';
 
 interface CalendarSectionProps {
   onUpdate: () => void;
@@ -14,13 +25,15 @@ interface CalendarSectionProps {
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   ES: { bg: 'rgba(59, 130, 246, 0.12)', text: '#60A5FA', border: 'rgba(59, 130, 246, 0.3)' },
-  SPI: { bg: 'rgba(168, 85, 247, 0.12)', text: '#C084FC', border: 'rgba(168, 85, 247, 0.3)' },
-  WEBテスト: { bg: 'rgba(14, 165, 233, 0.12)', text: '#38BDF8', border: 'rgba(14, 165, 233, 0.3)' },
-  面接: { bg: 'rgba(244, 63, 94, 0.12)', text: '#FB7185', border: 'rgba(244, 63, 94, 0.3)' },
-  OB訪問: { bg: 'rgba(245, 158, 11, 0.12)', text: '#FBBF24', border: 'rgba(245, 158, 11, 0.3)' },
-  説明会: { bg: 'rgba(16, 185, 129, 0.12)', text: '#34D399', border: 'rgba(16, 185, 129, 0.3)' },
-  自己分析: { bg: 'rgba(99, 102, 241, 0.12)', text: '#818CF8', border: 'rgba(99, 102, 241, 0.3)' },
+  テスト: { bg: 'rgba(168, 85, 247, 0.12)', text: '#C084FC', border: 'rgba(168, 85, 247, 0.3)' },
+  '1次面接': { bg: 'rgba(239, 68, 68, 0.12)', text: '#F87171', border: 'rgba(239, 68, 68, 0.3)' },
+  '2次面接': { bg: 'rgba(220, 38, 38, 0.15)', text: '#EF4444', border: 'rgba(220, 38, 38, 0.35)' },
+  '最終面接': { bg: 'rgba(185, 28, 28, 0.2)', text: '#DC2626', border: 'rgba(185, 28, 28, 0.4)' },
+  'AI・動画面接': { bg: 'rgba(6, 182, 212, 0.12)', text: '#22D3EE', border: 'rgba(6, 182, 212, 0.3)' },
+  '面談・リクルーター': { bg: 'rgba(16, 185, 129, 0.12)', text: '#34D399', border: 'rgba(16, 185, 129, 0.3)' },
   GD: { bg: 'rgba(236, 72, 153, 0.12)', text: '#F472B6', border: 'rgba(236, 72, 153, 0.3)' },
+  説明会: { bg: 'rgba(245, 158, 11, 0.12)', text: '#FBBF24', border: 'rgba(245, 158, 11, 0.3)' },
+  OB訪問: { bg: 'rgba(217, 119, 6, 0.12)', text: '#F59E0B', border: 'rgba(217, 119, 6, 0.3)' },
   インターン: { bg: 'rgba(249, 115, 22, 0.12)', text: '#FB923C', border: 'rgba(249, 115, 22, 0.3)' },
   その他: { bg: 'rgba(148, 163, 184, 0.12)', text: '#94A3B8', border: 'rgba(148, 163, 184, 0.3)' },
 };
@@ -31,23 +44,59 @@ function getCategoryStyle(cat: string) {
 
 export default function CalendarSection({ onUpdate, onToast }: CalendarSectionProps) {
   const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(() => new Date().toISOString().split('T')[0]);
-  const [countdowns, setCountdowns] = useState<CountdownEvent[]>(() => getCountdowns());
-  const myPosts = getPostsByUser(getCurrentUserId());
+  const [selectedDateStr, setSelectedDateStr] = useState(() => getLocalDateStr());
+  const [countdowns, setCountdowns] = useState<CountdownEvent[]>([]);
+  const { currentUser } = useAuth();
+  const [myPosts, setMyPosts] = useState<FirestorePost[]>([]);
+
+  // 1分ごとに日付変更をチェックして自動で今日に更新
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const today = getLocalDateStr();
+      if (today !== selectedDateStr) {
+        setSelectedDateStr(today);
+        setCurrentDate(new Date());
+      }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [selectedDateStr]);
 
   useEffect(() => {
-    // 画面表示時に3日前・前日のリマインド通知を全自動生成
-    checkAndGenerateReminderNotifications();
+    if (!currentUser) return;
+    const unsubPosts = subscribeToUserPosts(currentUser.uid, (posts) => {
+      setMyPosts(posts);
+    });
+    const unsubEvents = subscribeToCalendarEvents(currentUser.uid, (events) => {
+      const mapped: CountdownEvent[] = events.map(e => ({
+        id: e.id || '',
+        title: e.title,
+        company: e.company,
+        targetDate: e.date,
+        category: e.category,
+        time: e.time,
+        location: e.location,
+        priority: e.priority || 'high',
+      }));
+      setCountdowns(mapped);
+    });
+    return () => {
+      unsubPosts();
+      unsubEvents();
+    };
+  }, [currentUser]);
+
+  useEffect(() => {
     onUpdate();
   }, []);
 
   // Modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [newCompany, setNewCompany] = useState('');
   const [newTitle, setNewTitle] = useState('');
-  const [newDate, setNewDate] = useState(selectedDateStr);
+  const [newCategory, setNewCategory] = useState<string>('ES');
+  const [newDate, setNewDate] = useState(() => getLocalDateStr());
   const [newTime, setNewTime] = useState('');
   const [newLocation, setNewLocation] = useState('');
-  const [newCategory, setNewCategory] = useState('ES');
   const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('high');
 
   const year = currentDate.getFullYear();
@@ -67,39 +116,44 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     setCurrentDate(new Date(year, month + 1, 1));
   }
 
-  function handleAddEvent() {
+  async function handleAddEvent() {
     if (!newDate) {
       onToast?.('予定日を選択してください', 'error');
       return;
     }
+    if (!currentUser) return;
     const finalTitle = newTitle.trim() || `${newCategory}`;
-    const updated = addCountdown({
+    const eventData = {
       title: finalTitle,
-      targetDate: newDate,
+      company: newCompany.trim() || undefined,
+      date: newDate,
       category: newCategory,
+      priority: newPriority,
       time: newTime.trim() || undefined,
       location: newLocation.trim() || undefined,
-      priority: newPriority,
-    });
-    setCountdowns(updated);
+    };
+
+    // Firestoreに保存 → onSnapshotが自動発火し画面に反映
     setShowAddModal(false);
+    setNewCompany('');
     setNewTitle('');
     setNewTime('');
     setNewLocation('');
+
+    await addCalendarEvent(currentUser.uid, eventData);
+    onToast?.('カレンダーに登録されました！', 'success');
     onUpdate();
-    onToast?.('カレンダーに登録されました', 'success');
   }
 
-  function handleDeleteEvent(id: string) {
-    const updated = deleteCountdown(id);
-    setCountdowns(updated);
+  async function handleDeleteEvent(id: string) {
+    await deleteCalendarEvent(id);
     onUpdate();
     onToast?.('予定を削除しました', 'success');
   }
 
   // 選択中の日付に該当するカウントダウンイベントと投稿記録
   const selectedEvents = countdowns.filter((cd) => cd.targetDate === selectedDateStr);
-  const selectedPosts = myPosts.filter((p) => p.createdAt.startsWith(selectedDateStr));
+  const selectedPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(selectedDateStr));
 
   // カレンダーマスの生成
   const calendarCells = [];
@@ -111,13 +165,13 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   for (let d = 1; d <= daysInMonth; d++) {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayEvents = countdowns.filter((cd) => cd.targetDate === dStr);
-    const dayPosts = myPosts.filter((p) => p.createdAt.startsWith(dStr));
+    const dayPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(dStr));
     calendarCells.push({
       day: d,
       dateStr: dStr,
       events: dayEvents,
       posts: dayPosts,
-      isToday: dStr === new Date().toISOString().split('T')[0],
+      isToday: dStr === getLocalDateStr(),
       isSelected: dStr === selectedDateStr,
     });
   }
@@ -293,20 +347,20 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                           </span>
                         )}
 
-                        {/* 優先度カテゴリー表示 (高め / 普通 / 低め) */}
+                        {/* 志望度表示 (第一志望群 / 第二志望群 / 練習) */}
                         {ev.priority === 'high' && (
-                          <span style={{ background: '#88133755', color: '#F87171', border: '1px solid #9F1239', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
-                            🔴 優先度高め
+                          <span style={{ background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
+                            第一志望群
                           </span>
                         )}
                         {ev.priority === 'medium' && (
-                          <span style={{ background: '#78350F55', color: '#FBBF24', border: '1px solid #92400E', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700 }}>
-                            🟡 優先度普通
+                          <span style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700 }}>
+                            第二志望群
                           </span>
                         )}
                         {ev.priority === 'low' && (
-                          <span style={{ background: '#1E293B', color: '#94A3B8', border: '1px solid #334155', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 600 }}>
-                            🟢 優先度低め
+                          <span style={{ background: 'var(--bg-surface-2)', color: '#94A3B8', border: '1px solid var(--border-color)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 600 }}>
+                            練習
                           </span>
                         )}
 
@@ -343,28 +397,27 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
           )}
         </div>
 
-
-        {/* ── 3. 🏆 優先順位ごとの枠組み（🔴 優先度高め / 🟡 優先度普通 / 🟢 優先度低め） ── */}
+        {/* ── 3. 志望度別選考グループ（絵文字なし・シンプルデザイン） ── */}
         <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <h3 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: 14, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            🏆 優先度別の枠組みグループ
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 800, marginBottom: 14, color: 'var(--text-primary)' }}>
+            志望度別選考グループ
           </h3>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {[
-              { id: 'high', title: '🔴 優先度高め (第一志望・本命)', color: '#F87171', border: '#9F1239', bg: '#88133722' },
-              { id: 'medium', title: '🟡 優先度普通 (志望度中)', color: '#FBBF24', border: '#92400E', bg: '#78350F22' },
-              { id: 'low', title: '🟢 優先度低め (滑り止め・念のため)', color: '#94A3B8', border: '#334155', bg: '#1E293B33' },
+              { id: 'high', title: '第一志望群 (本命選考)', color: '#EF4444' },
+              { id: 'medium', title: '第二志望群 (併願選考)', color: '#F59E0B' },
+              { id: 'low', title: '練習・面接慣れ (情報収集)', color: '#94A3B8' },
             ].map((group) => {
               const groupEvents = countdowns.filter((ev) => (ev.priority || 'high') === group.id);
               const today = new Date(); today.setHours(0, 0, 0, 0);
 
               return (
                 <div key={group.id} style={{
-                  padding: 14, borderRadius: 14,
-                  background: group.bg, border: `1px solid ${group.border}`,
+                  padding: '12px 14px', borderRadius: 12,
+                  background: 'var(--bg-surface-2)', border: '1px solid var(--border-color)',
                 }}>
-                  <div style={{ fontSize: '0.825rem', fontWeight: 800, color: group.color, marginBottom: 10 }}>
+                  <div style={{ fontSize: '0.825rem', fontWeight: 800, color: group.color, marginBottom: 8 }}>
                     {group.title} ({groupEvents.length}件)
                   </div>
 
@@ -380,22 +433,21 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         return (
                           <div key={ev.id} style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            padding: '10px 12px', borderRadius: 10,
+                            padding: '8px 12px', borderRadius: 8,
                             background: 'var(--bg-surface)', border: '1px solid var(--border-color)',
                             opacity: isPast ? 0.6 : 1,
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                              {/* 締切までの日数表示 */}
                               <span style={{
-                                background: isPast ? '#334155' : daysLeft === 0 ? '#DC2626' : 'var(--color-primary-glow)',
-                                color: isPast ? '#94A3B8' : daysLeft === 0 ? 'white' : 'var(--color-primary)',
-                                border: `1px solid ${isPast ? '#334155' : 'var(--color-primary)'}`,
+                                background: isPast ? 'var(--bg-surface-2)' : daysLeft === 0 ? '#EF4444' : 'rgba(59, 130, 246, 0.12)',
+                                color: isPast ? 'var(--text-muted)' : daysLeft === 0 ? 'white' : '#60A5FA',
+                                border: `1px solid ${isPast ? 'var(--border-color)' : 'rgba(59, 130, 246, 0.3)'}`,
                                 padding: '1px 7px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800, flexShrink: 0,
                               }}>
-                                {isPast ? '終了' : daysLeft === 0 ? '本日締切!' : `あと ${daysLeft} 日`}
+                                {isPast ? '終了' : daysLeft === 0 ? '本日締切' : `あと ${daysLeft} 日`}
                               </span>
 
-                              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isPast ? '#94A3B8' : 'var(--text-primary)', textDecoration: isPast ? 'line-through' : 'none' }}>
+                              <span style={{ fontWeight: 700, fontSize: '0.85rem', color: isPast ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: isPast ? 'line-through' : 'none' }}>
                                 {ev.title}
                               </span>
                             </div>
@@ -413,6 +465,97 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             })}
           </div>
         </div>
+
+        {/* ── 4. 🎯 選考ステップ別グループ管理（1次面接/2次面接/最終面接などステップ単位で管理） ── */}
+        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
+          <div style={{ marginBottom: 14 }}>
+            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              🎯 選考ステップ別グループ管理
+            </h3>
+            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
+              「1次面接」「2次面接」「3次〜面接」「最終面接」「ES」「テスト」など、現在抱えている選考段階ごとに予定・企業を整理
+            </p>
+          </div>
+
+          {(() => {
+            const STEP_ORDER = [
+              { name: 'ES・書類選考', match: (ev: CountdownEvent) => ev.category === 'ES' || ev.title.includes('ES') },
+              { name: 'テスト', match: (ev: CountdownEvent) => ev.category === 'テスト' || ev.title.includes('テスト') || ev.title.includes('SPI') },
+              { name: '1次面接', match: (ev: CountdownEvent) => ev.title.includes('1次面接') || ev.title.includes('一次面接') },
+              { name: '2次面接', match: (ev: CountdownEvent) => ev.title.includes('2次面接') || ev.title.includes('二次面接') },
+              { name: '3次〜面接', match: (ev: CountdownEvent) => ev.title.includes('3次') || ev.title.includes('三次') || ev.title.includes('4次') },
+              { name: '最終面接', match: (ev: CountdownEvent) => ev.title.includes('最終面接') || ev.title.includes('役員面接') || ev.title.includes('社長面接') },
+              { name: '動画面接・AI面接', match: (ev: CountdownEvent) => ev.title.includes('動画面接') || ev.title.includes('AI面接') },
+              { name: '面談・リクルーター', match: (ev: CountdownEvent) => ev.title.includes('面談') || ev.title.includes('リクルーター') },
+              { name: 'GD・その他', match: (ev: CountdownEvent) => ev.category === 'GD' || ev.category === '説明会' || ev.category === 'インターン' || ev.category === 'OB訪問' || ev.category === 'その他' },
+            ];
+
+            const groupedSteps = STEP_ORDER.map((step) => {
+              const items = countdowns.filter((ev) => step.match(ev));
+              return { ...step, items };
+            }).filter((group) => group.items.length > 0);
+
+            if (groupedSteps.length === 0) {
+              return (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
+                  予定を登録すると、「1次面接」「2次面接」「最終面接」などの選考ステップごとに抱えている企業・予定が自動で整理されます！
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {groupedSteps.map((group) => (
+                  <div key={group.name} style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-surface-2)', border: '1px solid var(--border-color)' }}>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span>📍 【{group.name}】</span>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                        {group.items.length} 件の予定
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {group.items.map((ev) => {
+                        const today = new Date(); today.setHours(0, 0, 0, 0);
+                        const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
+                        const daysLeft = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                        const isPast = daysLeft < 0;
+
+                        return (
+                          <div
+                            key={ev.id}
+                            style={{
+                              padding: '8px 12px',
+                              borderRadius: 8,
+                              background: isPast ? 'var(--bg-surface)' : 'rgba(37, 99, 235, 0.12)',
+                              border: `1px solid ${isPast ? 'var(--border-color)' : 'rgba(37, 99, 235, 0.35)'}`,
+                              opacity: isPast ? 0.6 : 1,
+                              minWidth: 140,
+                            }}
+                          >
+                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: isPast ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                              {ev.company ? `${ev.company}` : ev.title}
+                            </div>
+                            {ev.company && (
+                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 1 }}>
+                                {ev.title}
+                              </div>
+                            )}
+                            <div style={{ fontSize: '0.68rem', color: isPast ? 'var(--text-muted)' : '#60A5FA', fontWeight: 700, marginTop: 4 }}>
+                              {isPast ? '完了' : daysLeft === 0 ? '本日予定!' : `あと${daysLeft}日`} ({ev.targetDate.slice(5).replace('-', '/')})
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+
+        {/* ── 5. カレンダー本体 ── */}
       </div>
 
       {/* ── 予定追加モーダル (記録投稿と同じカラフルワンタップ項目選択) ── */}
@@ -430,50 +573,97 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* 1. 予定の項目選択 (記録と同じワンタップカラーチップ) */}
+              {/* 1. 予定の項目選択 (クリアな8色カラーチップ) */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
-                  1. 予定の項目 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(タップしてテーマカラーを決定)</span>
+                  1. 予定の項目 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(カラーで分類)</span>
                 </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {[
-                    'ES', 'SPI', 'WEBテスト', '面接', 'OB訪問',
-                    '説明会', '自己分析', 'GD', 'インターン', 'その他'
-                  ].map((cat) => {
-                    const style = getCategoryStyle(cat);
-                    const isSelected = newCategory === cat;
+                  {CATEGORIES.map((c) => {
+                    const style = getCategoryStyle(c.id);
+                    const isSelected = newCategory === c.id;
                     return (
                       <button
-                        key={cat}
+                        key={c.id}
                         type="button"
-                        onClick={() => setNewCategory(cat)}
+                        onClick={() => setNewCategory(c.id)}
                         style={{
-                          padding: '6px 13px', borderRadius: 99,
-                          fontSize: '0.78rem', fontWeight: 700,
+                          padding: '6px 14px', borderRadius: 99,
+                          fontSize: '0.82rem', fontWeight: 700,
                           cursor: 'pointer', transition: 'all 0.15s',
                           background: isSelected ? style.text : 'var(--bg-surface-2)',
                           color: isSelected ? '#FFFFFF' : style.text,
                           border: `1.5px solid ${isSelected ? style.text : style.border}`,
-                          boxShadow: isSelected ? `0 0 10px ${style.text}55` : 'none',
                         }}
                       >
-                        {cat}
+                        {c.label}
                       </button>
                     );
                   })}
                 </div>
+
+                {/* 面接が選択された時のサブタグ選択パネル */}
+                {newCategory === '面接' && (
+                  <div style={{ marginTop: 10, padding: 12, borderRadius: 12, background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)' }}>
+                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: '#EF4444', display: 'block', marginBottom: 6 }}>
+                      🗣️ 面接の種類・ステップを選択
+                    </label>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {INTERVIEW_SUB_TAGS.map((tag) => {
+                        const isSelected = newTitle.includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            onClick={() => {
+                              setNewTitle((prev) => {
+                                if (!prev) return tag;
+                                const parts = prev.split(' ');
+                                return `${parts[0]} ${tag}`;
+                              });
+                            }}
+                            style={{
+                              padding: '5px 11px', borderRadius: 8,
+                              fontSize: '0.76rem', fontWeight: 700,
+                              background: isSelected ? '#EF4444' : 'var(--bg-surface)',
+                              color: isSelected ? 'white' : 'var(--text-primary)',
+                              border: `1px solid ${isSelected ? '#EF4444' : 'var(--border-color)'}`,
+                              cursor: 'pointer', transition: 'all 0.15s',
+                            }}
+                          >
+                            {isSelected ? '✓ ' : '+ '}{tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* 2. 予定の企業名・タイトル (任意) */}
+              {/* 2. 企業名入力欄 */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
-                  2. 企業名・詳細 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(任意・未入力の場合はカテゴリ名になります)</span>
+                  2. 企業名 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(選考を受ける企業名を入力)</span>
+                </label>
+                <input
+                  className="input"
+                  value={newCompany}
+                  onChange={(e) => setNewCompany(e.target.value)}
+                  placeholder="例: トヨタ自動車 / サイバーエージェント / ソニー"
+                  style={{ fontSize: '0.9rem', padding: '11px 13px' }}
+                />
+              </div>
+
+              {/* 3. 予定の詳細タイトル・選考ステップ */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                  3. 選考ステップ・詳細 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(面接時は上のサブタグをタップで簡単入力)</span>
                 </label>
                 <input
                   className="input"
                   value={newTitle}
                   onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder={`例: リクルート / サイバーエージェント (空欄でもOK)`}
+                  placeholder="例: 1次面接 / ES締め切り / Webテスト"
                   style={{ fontSize: '0.9rem', padding: '11px 13px' }}
                 />
               </div>
@@ -492,33 +682,37 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 />
               </div>
 
-              {/* 4. 優先度の選択 (最重要 / 普通 / 低) */}
+              {/* 4. 志望度の選択 (第一志望群 / 第二志望群 / 練習) */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
-                  4. 優先度 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(志望度・本命度の指定)</span>
+                  4. 志望度
                 </label>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                   {[
-                    { id: 'high' as const, label: '🔴 優先度高め', color: '#F87171', bg: '#88133744', border: '#9F1239' },
-                    { id: 'medium' as const, label: '🟡 優先度普通', color: '#FBBF24', bg: '#78350F44', border: '#92400E' },
-                    { id: 'low' as const, label: '🟢 優先度低め', color: '#94A3B8', bg: '#1E293B', border: '#334155' },
-                  ].map((p) => (
-                    <button
-                      key={p.id}
-                      type="button"
-                      onClick={() => setNewPriority(p.id)}
-                      style={{
-                        padding: '9px 4px', borderRadius: 10,
-                        border: `1.5px solid ${newPriority === p.id ? p.color : 'var(--border-color)'}`,
-                        background: newPriority === p.id ? p.bg : 'var(--bg-surface-2)',
-                        color: newPriority === p.id ? p.color : 'var(--text-secondary)',
-                        fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer',
-                        transition: 'all 0.15s', textAlign: 'center',
-                      }}
-                    >
-                      {p.label}
-                    </button>
-                  ))}
+                    { id: 'high' as const, label: '第一志望群', desc: '最優先・本命' },
+                    { id: 'medium' as const, label: '第二志望群', desc: '併願・重要' },
+                    { id: 'low' as const, label: '練習・面接慣れ', desc: '情報収集' },
+                  ].map((p) => {
+                    const isSelected = newPriority === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setNewPriority(p.id)}
+                        style={{
+                          padding: '10px 4px', borderRadius: 10,
+                          border: isSelected ? '1.5px solid var(--color-primary)' : '1px solid var(--border-color)',
+                          background: isSelected ? 'var(--bg-surface-2)' : 'transparent',
+                          color: isSelected ? 'var(--color-primary)' : 'var(--text-secondary)',
+                          fontSize: '0.78rem', fontWeight: isSelected ? 800 : 500, cursor: 'pointer',
+                          transition: 'all 0.15s', textAlign: 'center',
+                        }}
+                      >
+                        <div>{p.label}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: 2 }}>{p.desc}</div>
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 

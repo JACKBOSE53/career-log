@@ -94,36 +94,6 @@ export function getCurrentUserId(): string {
   return load(KEY.CURRENT_USER_ID, 'user-me');
 }
 
-// Firebase Authenticationのログイン状態が変わった時に、
-// このローカルストア(将来Firestoreに置き換わる想定)の「今のユーザー」を切り替える。
-export function setCurrentUserId(uid: string): void {
-  save(KEY.CURRENT_USER_ID, uid);
-}
-
-// Firebase Authで新規サインアップ/初回ログインしたユーザーが
-// ローカルのusers一覧にまだ存在しない場合、プロフィールの雛形を作成する。
-// (store.ts自体をFirestore対応させる際は、この関数はFirestore側の
-//  users/{uid} ドキュメント作成処理に置き換える)
-export function ensureUserExists(uid: string, profile: { name: string; email: string }): void {
-  const users = getAllUsers();
-  if (users.some((u) => u.id === uid)) return;
-
-  const newUser: User = {
-    id: uid,
-    name: profile.name || '名称未設定',
-    handle: `user_${uid.slice(0, 8)}`,
-    email: profile.email,
-    avatar: (profile.name || profile.email || '?').charAt(0).toUpperCase(),
-    university: '',
-    grade: '未設定',
-    followersCount: 0,
-    followingCount: 0,
-    joinedAt: new Date().toISOString(),
-  };
-
-  save(KEY.USERS, [...users, newUser]);
-}
-
 export function getAllUsers(): User[] {
   return load(KEY.USERS, INITIAL_USERS);
 }
@@ -468,12 +438,12 @@ export function getUnreadCount(): number {
 export function getUserStats(userId: string) {
   const posts = getPostsByUser(userId);
   const esPosts = posts.filter((p) => p.category === 'ES');
-  const interviewPosts = posts.filter((p) => p.category === '面接');
-  const spiPosts = posts.filter((p) => p.category === 'SPI');
+  const interviewPosts = posts.filter((p) => p.category.includes('面接') || p.category.includes('面談'));
+  const testPosts = posts.filter((p) => p.category === 'テスト');
   const obPosts = posts.filter((p) => p.category === 'OB訪問');
   const internPosts = posts.filter((p) => p.category === 'インターン');
 
-  const spiMinutes = spiPosts.reduce((acc, p) => acc + (p.studyMinutes ?? 0), 0);
+  const spiMinutes = testPosts.reduce((acc, p) => acc + (p.studyMinutes ?? 0), 0);
 
   // Consecutive days (simple calculation)
   const dates = posts

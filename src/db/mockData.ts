@@ -1,26 +1,41 @@
 export type Category =
   | 'ES'
-  | 'SPI'
-  | 'WEBテスト'
+  | 'テスト'
   | '面接'
-  | 'OB訪問'
-  | '説明会'
-  | '自己分析'
   | 'GD'
+  | '説明会'
+  | 'OB訪問'
   | 'インターン'
   | 'その他';
 
+export type InterviewSubTag =
+  | '1次面接'
+  | '2次面接'
+  | '3次〜面接'
+  | '最終面接'
+  | '動画面接'
+  | 'AI面接'
+  | '面談・リクルーター';
+
+export const INTERVIEW_SUB_TAGS: InterviewSubTag[] = [
+  '1次面接',
+  '2次面接',
+  '3次〜面接',
+  '最終面接',
+  '動画面接',
+  'AI面接',
+  '面談・リクルーター',
+];
+
 export const CATEGORIES: { id: Category; label: string; emoji: string; color: string }[] = [
-  { id: 'ES', label: 'ES', emoji: '', color: '#3B82F6' },
-  { id: 'SPI', label: 'SPI', emoji: '', color: '#8B5CF6' },
-  { id: 'WEBテスト', label: 'WEBテスト', emoji: '', color: '#0284C7' },
-  { id: '面接', label: '面接', emoji: '', color: '#EF4444' },
-  { id: 'OB訪問', label: 'OB訪問', emoji: '', color: '#F59E0B' },
-  { id: '説明会', label: '説明会', emoji: '', color: '#10B981' },
-  { id: '自己分析', label: '自己分析', emoji: '', color: '#6366F1' },
-  { id: 'GD', label: 'GD', emoji: '', color: '#EC4899' },
-  { id: 'インターン', label: 'インターン', emoji: '', color: '#F97316' },
-  { id: 'その他', label: 'その他', emoji: '', color: '#64748B' },
+  { id: 'ES', label: 'ES', emoji: '', color: '#2563EB' },             // 鮮やかブルー
+  { id: 'テスト', label: 'テスト', emoji: '', color: '#8B5CF6' },       // 鮮やかパープル
+  { id: '面接', label: '面接', emoji: '', color: '#EF4444' },         // 鮮やかレッド
+  { id: 'GD', label: 'GD', emoji: '', color: '#EC4899' },             // 鮮やかピンク
+  { id: '説明会', label: '説明会', emoji: '', color: '#F59E0B' },       // 鮮やかアンバー
+  { id: 'OB訪問', label: 'OB訪問', emoji: '', color: '#10B981' },     // 鮮やかエメラルド
+  { id: 'インターン', label: 'インターン', emoji: '', color: '#F97316' }, // 鮮やかオレンジ
+  { id: 'その他', label: 'その他', emoji: '', color: '#64748B' },     // スレートグレー
 ];
 
 export type JobStatus = '就活中' | '内定承諾済み' | '活動休止中' | 'OB/OG' | '未設定';
@@ -38,6 +53,7 @@ export interface User {
   name: string; // ニックネーム
   handle: string;
   email: string; // メールアドレス
+  password?: string; // パスワード
   avatar: string;
   avatarUrl?: string;
   university: string; // 大学名
@@ -105,11 +121,12 @@ export const INITIAL_COMMUNITY_MESSAGES: CommunityMessage[] = [
 export interface CountdownEvent {
   id: string;
   title: string;
+  company?: string;
   targetDate: string; // YYYY-MM-DD
   category: string;
   time?: string; // 例: '14:00〜15:30'
   location?: string; // 例: 'オンライン (Zoom)' / 'テストセンター新宿'
-  priority?: 'high' | 'medium' | 'low'; // 最優先 / 普通 / 低
+  priority?: 'high' | 'medium' | 'low'; // 第一志望群 / 第二志望群 / 練習
 }
 
 export interface WeeklyGoal {
@@ -141,11 +158,11 @@ export const INITIAL_COUNTDOWNS: CountdownEvent[] = [
 ];
 
 export const INITIAL_WEEKLY_GOAL: WeeklyGoal = {
-  title: '今週ES 3社提出 & 面接対策2時間',
+  title: '今週の就活アクション 3回達成',
   targetType: 'count',
   goalValue: 3,
   currentValue: 2,
-  unit: '社',
+  unit: '回',
 };
 
 export const INITIAL_BADGES: AchievementBadge[] = [
@@ -174,6 +191,7 @@ export const INITIAL_USERS: User[] = [
     name: '高木 悠太',
     handle: 'yuta_careerlog',
     email: 'yuta@example.com',
+    password: 'password123',
     avatar: 'Y',
     university: '早稲田大学',
     grade: '26卒 (大学3年)',
@@ -187,10 +205,10 @@ export const INITIAL_POSTS: Post[] = [
   {
     id: 'post-init-1',
     userId: 'user-me',
-    category: '自己分析',
+    category: 'ES',
     title: 'CareerLogでの記録をスタートしました！',
     content: '今日から就活の取り組み時間・行動量を記録して、自己管理を徹底していきます！目指せ志望企業内定',
-    tags: ['自己分析', '就活スタート', 'CareerLog'],
+    tags: ['ES', '就活スタート', 'CareerLog'],
     studyMinutes: 45,
     visibility: 'public',
     likesCount: 0,

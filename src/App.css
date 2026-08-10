@@ -7,18 +7,23 @@
   background: var(--bg-base);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
   border-right: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: hidden; /* 横スクロール完全防止 */
 }
 
 .main-content {
   flex: 1;
   min-width: 0;
+  max-width: 100%; /* 親からはみ出さない */
   background: var(--bg-base);
+  overflow-x: hidden;
 }
 
 .content-inner {
   max-width: 680px;
   margin: 0 auto;
   padding: 0 16px 80px;
+  box-sizing: border-box;
+  width: 100%;
 }
 
 /* Desktop — no bottom padding needed */
@@ -28,21 +33,73 @@
   }
 }
 
-/* Mobile layout */
+/* ────────────────────────────────────────────────────────────
+   Mobile layout (〜767px)
+   ──────────────────────────────────────────────────────────── */
 @media (max-width: 767px) {
+  /* アプリ全体 */
   .app-layout {
     flex-direction: column;
     max-width: 100%;
+    width: 100%;
     box-shadow: none;
+    border: none;
+    overflow-x: hidden;
   }
 
+  /* メインコンテンツ */
   .main-content {
     padding-bottom: 80px; /* space for bottom nav */
+    width: 100%;
+    overflow-x: hidden;
   }
 
   .content-inner {
     max-width: 100%;
-    padding: 12px 12px 24px;
+    width: 100%;
+    padding: 8px 12px 24px;
+    overflow-x: hidden;
+  }
+
+  /* カード全般 */
+  .card {
+    border-radius: 12px;
+    overflow: visible; /* 子要素のドロップダウンが切れないように */
+  }
+
+  /* ボタン — タッチしやすいように最小44px */
+  .btn {
+    min-height: 44px;
+    font-size: 0.9rem;
+    padding: 10px 18px;
+  }
+  .btn-sm {
+    min-height: 38px;
+    padding: 8px 14px;
+    font-size: 0.82rem;
+  }
+
+  /* フォーム入力 — タッチ操作向け */
+  .input {
+    font-size: 16px; /* iOS のズームイン防止（16px未満でズーム発動） */
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
+  /* タブナビ — スクロール対応 */
+  .tabs {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* モーダル — スマホで全幅対応 */
+  .modal-overlay {
+    padding: 12px 8px;
+    align-items: flex-end; /* スマホではシート風に下から */
+  }
+  .modal-content {
+    max-width: 100%;
+    border-radius: 20px 20px 0 0; /* 下部の角は丸めない */
+    max-height: 92vh;
   }
 
   /* Position FAB above mobile bottom nav */
@@ -58,5 +115,17 @@
   /* Hide FAB when modal is open */
   .modal-overlay ~ .fab {
     display: none;
+  }
+
+  /* Toast — スマホでは上から表示 */
+  .toast {
+    bottom: auto;
+    top: 16px;
+    transform: translateX(-50%);
+    font-size: 0.82rem;
+    padding: 10px 20px;
+    max-width: calc(100vw - 32px);
+    white-space: normal;
+    text-align: center;
   }
 }

@@ -278,17 +278,19 @@ img {
 }
 
 .btn-primary {
-  background: var(--gradient-primary);
+  background: var(--color-primary);
   color: white;
-  box-shadow: 0 4px 15px rgba(37, 99, 235, 0.35);
+  border: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 .btn-primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.45);
+  background: var(--color-primary-dark);
+  transform: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
 }
 .btn-primary:active {
-  transform: translateY(0);
-  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-secondary {
@@ -602,4 +604,60 @@ img {
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+
+/* ── 7. Mobile Responsive Overrides (〜767px) ──────────────── */
+@media (max-width: 767px) {
+
+  /* ─ 全要素の横スクロール防止 ─ */
+  * {
+    max-width: 100%;
+  }
+  img, video, canvas, svg {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* ─ フォントサイズ調整 ─ */
+  html {
+    font-size: 15px; /* 少し小さくしてスマホで見やすく */
+  }
+
+  /* ─ iOS のフォームズームイン防止 ─
+     16px未満のinputはiOSが自動ズームする */
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+
+  /* ─ タブナビのタッチ対応 ─ */
+  .tab-item {
+    padding: 10px 12px;
+    font-size: 0.8rem;
+    min-height: 44px;
+  }
+
+  /* ─ バッジ・タグ ─ */
+  .badge {
+    font-size: 0.7rem;
+    padding: 2px 8px;
+  }
+  .tag {
+    font-size: 0.7rem;
+    padding: 3px 8px;
+  }
+
+  /* ─ アバター ─ */
+  .avatar-xl  { width: 60px;  height: 60px;  }
+  .avatar-2xl { width: 80px;  height: 80px;  }
+
+  /* ─ スタット表示 ─ */
+  .stat-box .stat-value {
+    font-size: 1.1rem;
+  }
+
+  /* ─ スクロールバー非表示（モバイルでは不要） ─ */
+  ::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 }

@@ -6,27 +6,78 @@ import Timeline from './components/Timeline';
 
 import CalendarSection from './components/CalendarSection';
 import SearchSection from './components/SearchSection';
+import CommunitySection from './components/CommunitySection';
 import NotificationSection from './components/NotificationSection';
 import ProfileView from './components/ProfileView';
 import CreatePostModal from './components/CreatePostModal';
 import StudyTimerModal from './components/StudyTimerModal';
 import { getUnreadCount } from './db/store';
 import { useAuth } from './contexts/AuthContext';
-import AuthScreen from './components/AuthScreen';
-
+import { subscribeToNotifications, subscribeToUserProfile, type UserProfile } from './db/firestore';
+import LoginPage from './pages/LoginPage';
+import OnboardingPage from './pages/OnboardingPage';
 
 import ToastNotification, { type ToastState } from './components/ToastNotification';
 
 export default function App() {
   const { currentUser, loading } = useAuth();
+  const [myProfile, setMyProfile] = useState<UserProfile | null | undefined>(undefined);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setMyProfile(null);
+      return;
+    }
+    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile) => {
+      setMyProfile(profile);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  // ── 認証ローディング中 ──────────────────────────────────────
+  if (loading || (currentUser && myProfile === undefined)) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0B0F17',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '50%',
+          border: '3px solid #26334D', borderTopColor: '#E06D53',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // ── 未ログイン ────────────────────────────────────────────────
+  if (!currentUser) return <LoginPage />;
+
+  // ── プロフィール未設定（オンボーディング） ──────────────────
+  if (!currentUser.displayName || !myProfile) return <OnboardingPage />;
+
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(getUnreadCount());
+  const [unreadCount, setUnreadCount] = useState(0);
   const [tick, setTick] = useState(0);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // URLの ?profile=xxx を読み取って自動遷移
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const profileUid = params.get('profile');
+    if (profileUid) {
+      setProfileUserId(profileUid);
+      setCurrentPage('profile');
+      // URLからパラメータを除去（ブラウザ履歴は汚さない）
+      const cleanUrl = window.location.pathname;
+      window.history.replaceState({}, '', cleanUrl);
+    }
+  }, []);
 
   useEffect(() => {
     const handler = () => setIsMobile(window.innerWidth < 768);
@@ -34,25 +85,26 @@ export default function App() {
     return () => window.removeEventListener('resize', handler);
   }, []);
 
-  // ログインが完了した(currentUserが確定した)タイミングで、
-  // そのユーザーの未読通知数を読み直す
+  // Firebase Authの状態を確認し、通知件数を購読
   useEffect(() => {
-    if (currentUser) {
-      setUnreadCount(getUnreadCount());
+    if (!currentUser) {
+      setUnreadCount(0);
+      return;
     }
+    const unsubscribe = subscribeToNotifications(currentUser.uid, (list) => {
+      const unread = list.filter((n) => !n.read).length;
+      setUnreadCount(unread);
+    });
+    return () => unsubscribe();
   }, [currentUser]);
 
   const handleUpdate = useCallback(() => {
-    setUnreadCount(getUnreadCount());
     setTick((t) => t + 1);
   }, []);
 
   function handleNavigate(page: Page) {
     setCurrentPage(page);
     setProfileUserId(null);
-    if (page === 'notifications') {
-      setTimeout(() => setUnreadCount(getUnreadCount()), 200);
-    }
   }
 
   function handleProfileClick(userId: string) {
@@ -69,20 +121,6 @@ export default function App() {
     setCurrentPage('home');
     handleUpdate();
     triggerToast('投稿が完了しました', 'success');
-  }
-
-  // Firebase Authの状態を確認中
-  if (loading) {
-    return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted, #9a9aa5)' }}>
-        読み込み中...
-      </div>
-    );
-  }
-
-  // 未ログインならログイン/新規登録画面を表示
-  if (!currentUser) {
-    return <AuthScreen />;
   }
 
   return (
@@ -104,9 +142,9 @@ export default function App() {
           {/* Page views */}
           {currentPage === 'home' && (
             <Timeline
-              key={`timeline-${tick}`}
               onUpdate={handleUpdate}
               onProfileClick={handleProfileClick}
+              onToast={triggerToast}
             />
           )}
 
@@ -121,6 +159,10 @@ export default function App() {
             />
           )}
 
+          {currentPage === 'communities' && (
+            <CommunitySection onUpdate={handleUpdate} />
+          )}
+
           {currentPage === 'notifications' && (
             <NotificationSection
               onUpdate={handleUpdate}
@@ -130,8 +172,8 @@ export default function App() {
 
           {currentPage === 'profile' && (
             <ProfileView
-              key={profileUserId ?? 'me'}
-              userId={profileUserId ?? 'user-me'}
+              key={profileUserId ?? currentUser.uid}
+              userId={profileUserId ?? currentUser.uid}
               onClose={profileUserId ? () => { setProfileUserId(null); setCurrentPage('home'); } : undefined}
               onUpdate={handleUpdate}
               onToast={triggerToast}
@@ -164,6 +206,7 @@ export default function App() {
         <StudyTimerModal
           onClose={() => setShowTimerModal(false)}
           onPostCreated={handlePostCreated}
+          onToast={triggerToast}
         />
       )}
 

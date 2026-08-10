@@ -1,108 +1,79 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import {
   onAuthStateChanged,
-  createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
-  updateProfile,
-  type User as FirebaseUser,
+  updateProfile as updateFirebaseAuthProfile,
 } from 'firebase/auth';
+import type { User } from 'firebase/auth';
 import { auth } from '../firebase';
-import { ensureUserExists, setCurrentUserId } from '../db/store';
+import { subscribeToUserProfile, type UserProfile } from '../db/firestore';
 
-interface AuthContextValue {
-  currentUser: FirebaseUser | null;
+interface AuthContextType {
+  currentUser: User | null;
+  profile: UserProfile | null;
   loading: boolean;
-  error: string | null;
-  signUp: (email: string, password: string, name: string) => Promise<void>;
-  logIn: (email: string, password: string) => Promise<void>;
-  logOut: () => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  logout: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextValue | undefined>(undefined);
+const AuthContext = createContext<AuthContextType | null>(null);
 
-// Firebaseのエラーコードを、日本語のわかりやすいメッセージに変換する
-function toFriendlyMessage(code: string): string {
-  switch (code) {
-    case 'auth/email-already-in-use':
-      return 'このメールアドレスは既に登録されています';
-    case 'auth/invalid-email':
-      return 'メールアドレスの形式が正しくありません';
-    case 'auth/weak-password':
-      return 'パスワードは6文字以上にしてください';
-    case 'auth/invalid-credential':
-    case 'auth/wrong-password':
-    case 'auth/user-not-found':
-      return 'メールアドレスまたはパスワードが正しくありません';
-    case 'auth/too-many-requests':
-      return '試行回数が多すぎます。しばらくしてから再度お試しください';
-    default:
-      return '認証中にエラーが発生しました。もう一度お試しください';
-  }
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        // ローカルストア(将来Firestoreに置き換え予定)側のプロフィールを用意し、
-        // 「今のユーザー」をFirebase Authのuidに切り替える
-        ensureUserExists(user.uid, {
-          name: user.displayName ?? user.email?.split('@')[0] ?? '',
-          email: user.email ?? '',
-        });
-        setCurrentUserId(user.uid);
-      }
+    let unsubProfile: (() => void) | null = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
       setCurrentUser(user);
-      setLoading(false);
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+      if (user) {
+        unsubProfile = subscribeToUserProfile(user.uid, (p) => {
+          setProfile(p);
+          setLoading(false);
+        });
+      } else {
+        setProfile(null);
+        setLoading(false);
+      }
     });
-    return unsubscribe;
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
-  async function signUp(email: string, password: string, name: string) {
-    setError(null);
-    try {
-      const credential = await createUserWithEmailAndPassword(auth, email, password);
-      await updateProfile(credential.user, { displayName: name });
-      ensureUserExists(credential.user.uid, { name, email });
-      setCurrentUserId(credential.user.uid);
-      setCurrentUser(credential.user);
-    } catch (e) {
-      const code = (e as { code?: string }).code ?? '';
-      setError(toFriendlyMessage(code));
-      throw e;
-    }
+  async function login(email: string, password: string) {
+    await signInWithEmailAndPassword(auth, email, password);
   }
 
-  async function logIn(email: string, password: string) {
-    setError(null);
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-    } catch (e) {
-      const code = (e as { code?: string }).code ?? '';
-      setError(toFriendlyMessage(code));
-      throw e;
-    }
+  async function signup(email: string, password: string, displayName: string) {
+    const { user } = await createUserWithEmailAndPassword(auth, email, password);
+    await updateFirebaseAuthProfile(user, { displayName });
   }
 
-  async function logOut() {
-    setError(null);
+  async function logout() {
     await signOut(auth);
   }
 
   return (
-    <AuthContext.Provider value={{ currentUser, loading, error, signUp, logIn, logOut }}>
+    <AuthContext.Provider value={{ currentUser, profile, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );
-}
-
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used within an AuthProvider');
-  return ctx;
 }

@@ -1,7 +1,16 @@
-import { useState } from 'react';
-import { Search, X, TrendingUp } from 'lucide-react';
-import { searchAll, isFollowing, toggleFollow } from '../db/store';
+import { useState, useEffect } from 'react';
+import { Search, X, UserPlus, UserCheck } from 'lucide-react';
+import { searchAll, isFollowing } from '../db/store';
+import { CATEGORIES, INTERVIEW_SUB_TAGS } from '../db/mockData';
 import type { Post, User, Community } from '../db/mockData';
+import {
+  searchUsersFirestore,
+  isFollowingFirestore,
+  sendFollowRequest,
+  unfollowUser,
+  type UserProfile,
+} from '../db/firestore';
+import { useAuth } from '../contexts/AuthContext';
 
 import PostCard from './PostCard';
 import CategoryBadge from './CategoryBadge';
@@ -11,24 +20,34 @@ interface SearchSectionProps {
   onProfileClick: (userId: string) => void;
 }
 
-const HOT_TAGS = ['SPI', 'ES', 'リクルート', 'インターン2025', 'OB訪問', 'メルカリ', 'コンサル', '自己分析'];
-
 export default function SearchSection({ onUpdate, onProfileClick }: SearchSectionProps) {
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<{ posts: Post[]; users: User[]; communities: Community[] } | null>(null);
-  const [tab, setTab] = useState<'posts' | 'users' | 'communities'>('posts');
+  const [results, setResults] = useState<{ posts: Post[]; users: (User | UserProfile)[]; communities: Community[] } | null>(null);
+  const [tab, setTab] = useState<'posts' | 'users' | 'companies'>('posts');
 
-  function handleSearch(q: string) {
+  async function handleSearch(q: string) {
     setQuery(q);
     if (q.trim().length < 1) {
       setResults(null);
       return;
     }
-    setResults(searchAll(q.trim()));
+    const mockRes = searchAll(q.trim());
+    const firestoreUsers = await searchUsersFirestore(q.trim());
+    
+    // 重複を除去して結合
+    const userMap = new Map<string, User | UserProfile>();
+    firestoreUsers.forEach((u) => userMap.set(u.id, u));
+    mockRes.users.forEach((u) => { if (!userMap.has(u.id)) userMap.set(u.id, u); });
+
+    setResults({
+      posts: mockRes.posts,
+      users: Array.from(userMap.values()),
+      communities: mockRes.communities,
+    });
   }
 
   return (
-    <div>
+    <div style={{ animation: 'fadeIn 0.2s ease', paddingBottom: 40 }}>
       {/* Search Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 10,
@@ -42,7 +61,7 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
           <input
             id="search-input"
             className="input"
-            placeholder="企業、タグ、ユーザー、投稿を検索..."
+            placeholder="企業名、1次面接、最終面接、SPI、テスト、キーワードで検索..."
             value={query}
             onChange={(e) => handleSearch(e.target.value)}
             style={{ paddingLeft: 40, paddingRight: 40, borderRadius: 'var(--border-radius-full)' }}
@@ -61,24 +80,50 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
 
       {!results ? (
         /* Discovery view */
-        <div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {/* カテゴリから探す */}
+          <div>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, marginBottom: 12, color: 'var(--text-primary)' }}>取り組みカテゴリから探す</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => handleSearch(cat.id)}
+                  className="card card-hover"
+                  style={{
+                    padding: 10, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <CategoryBadge category={cat.id} />
+                </button>
+              ))}
+            </div>
+          </div>
 
-
-          <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: 12 }}>カテゴリから探す</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-            {['ES', 'SPI', '面接', 'OB訪問', '説明会', '自己分析', 'GD', 'インターン', 'その他'].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => handleSearch(cat)}
-                className="card card-hover"
-                style={{
-                  padding: 16, cursor: 'pointer', border: 'none', fontFamily: 'inherit',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <CategoryBadge category={cat as any} />
-              </button>
-            ))}
+          {/* 面接ステップから探す */}
+          <div>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, marginBottom: 12, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>🗣️</span>
+              <span>面接ステップから探す</span>
+            </h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {INTERVIEW_SUB_TAGS.map((tag) => (
+                <button
+                  key={tag}
+                  onClick={() => handleSearch(tag)}
+                  style={{
+                    padding: '8px 14px', borderRadius: 10,
+                    fontSize: '0.8125rem', fontWeight: 800,
+                    background: 'rgba(239, 68, 68, 0.1)',
+                    color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)',
+                    cursor: 'pointer', transition: 'all 0.15s',
+                  }}
+                >
+                  🔍 {tag}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       ) : (
@@ -91,28 +136,28 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
             <button className={`tab-item ${tab === 'users' ? 'active' : ''}`} onClick={() => setTab('users')}>
               ユーザー {results.users.length > 0 && <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>{results.users.length}</span>}
             </button>
-            <button className={`tab-item ${tab === 'communities' ? 'active' : ''}`} onClick={() => setTab('communities')}>
-              コミュニティ {results.communities.length > 0 && <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>{results.communities.length}</span>}
+            <button className={`tab-item ${tab === 'companies' ? 'active' : ''}`} onClick={() => setTab('companies')}>
+              企業・コミュニティ {results.communities.length > 0 && <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)' }}>{results.communities.length}</span>}
             </button>
           </div>
 
           {tab === 'posts' && (
             results.posts.length === 0
-              ? <div className="empty-state"><span className="empty-state-icon"></span><p className="empty-state-title">投稿が見つかりませんでした</p></div>
+              ? <div className="empty-state"><span className="empty-state-icon"></span><p className="empty-state-title">「{query}」に関連する投稿が見つかりませんでした</p></div>
               : results.posts.map((post) => (
-                <PostCard key={post.id} post={post} onUpdate={onUpdate} onProfileClick={onProfileClick} />
+                <PostCard key={post.id} post={post as any} onUpdate={onUpdate} onProfileClick={onProfileClick} />
               ))
           )}
 
           {tab === 'users' && (
             results.users.length === 0
-              ? <div className="empty-state"><span className="empty-state-icon"></span><p className="empty-state-title">ユーザーが見つかりませんでした</p></div>
+              ? <div className="empty-state"><span className="empty-state-icon"></span><p className="empty-state-title">「{query}」に関連するユーザーが見つかりませんでした</p></div>
               : results.users.map((user) => <UserSearchCard key={user.id} user={user} onProfileClick={onProfileClick} onUpdate={onUpdate} />)
           )}
 
-          {tab === 'communities' && (
+          {tab === 'companies' && (
             results.communities.length === 0
-              ? <div className="empty-state"><span className="empty-state-icon">️</span><p className="empty-state-title">コミュニティが見つかりませんでした</p></div>
+              ? <div className="empty-state"><span className="empty-state-icon">🏢</span><p className="empty-state-title">「{query}」に関連する企業・コミュニティが見つかりませんでした</p></div>
               : results.communities.map((comm) => <CommunitySearchCard key={comm.id} community={comm} />)
           )}
         </div>
@@ -121,36 +166,128 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
   );
 }
 
-function UserSearchCard({ user, onProfileClick, onUpdate }: { user: User; onProfileClick: (id: string) => void; onUpdate: () => void }) {
-  const [following, setFollowing] = useState(isFollowing(user.id));
+function UserSearchCard({ user, onProfileClick, onUpdate }: { user: User | UserProfile; onProfileClick: (id: string) => void; onUpdate: () => void }) {
+  const { currentUser, profile: myProfile } = useAuth();
+  const [following, setFollowing] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
-  function handleFollow() {
-    const result = toggleFollow(user.id);
-    setFollowing(result);
-    onUpdate();
+  useEffect(() => {
+    if (!currentUser) return;
+    isFollowingFirestore(currentUser.uid, user.id).then((res) => {
+      setFollowing(res || isFollowing(user.id));
+    });
+  }, [currentUser, user.id]);
+
+  async function handleFollowClick() {
+    if (!currentUser || loading) return;
+    if (following) {
+      setShowConfirmModal(true);
+    } else {
+      setLoading(true);
+      try {
+        await sendFollowRequest(
+          currentUser.uid,
+          user.id,
+          myProfile?.name || currentUser.displayName || undefined,
+          myProfile?.avatar || currentUser.photoURL || undefined,
+        );
+        setRequestSent(true);
+      } finally {
+        setLoading(false);
+      }
+    }
+  }
+
+  async function confirmUnfollow() {
+    if (!currentUser) return;
+    setShowConfirmModal(false);
+    setLoading(true);
+    try {
+      await unfollowUser(currentUser.uid, user.id);
+      setFollowing(false);
+      setRequestSent(false);
+      onUpdate();
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
-    <div className="card" style={{ padding: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <button onClick={() => onProfileClick(user.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0 }}>
-        <span style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem' }}>
-          {user.avatar}
-        </span>
-      </button>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <button onClick={() => onProfileClick(user.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{user.name}</div>
+    <>
+      <div className="card" style={{ padding: 16, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
+        <button onClick={() => onProfileClick(user.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0 }}>
+          {user.avatar && (user.avatar.startsWith('http') || user.avatar.startsWith('data:')) ? (
+            <img src={user.avatar} alt={user.name} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
+          ) : (
+            <span style={{ width: 44, height: 44, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.25rem', color: 'white', fontWeight: 'bold' }}>
+              {user.avatar || user.name?.[0] || 'U'}
+            </span>
+          )}
         </button>
-        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.university} · {user.grade}</div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <button onClick={() => onProfileClick(user.id)} style={{ border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', padding: 0 }}>
+            <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{user.name}</div>
+          </button>
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{user.university || '大学未設定'} · {user.grade || '26卒'}</div>
+        </div>
+
+        {currentUser?.uid !== user.id && (
+          <button
+            onClick={handleFollowClick}
+            disabled={loading}
+            className={following ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
+            style={{ flexShrink: 0, gap: 4 }}
+          >
+            {following ? (
+              <>
+                <UserCheck size={14} /> フォロー中
+              </>
+            ) : requestSent ? (
+              '送信済み'
+            ) : (
+              <>
+                <UserPlus size={14} /> リクエスト
+              </>
+            )}
+          </button>
+        )}
       </div>
-      <button
-        onClick={handleFollow}
-        className={following ? 'btn btn-secondary btn-sm' : 'btn btn-primary btn-sm'}
-        style={{ flexShrink: 0 }}
-      >
-        {following ? 'フォロー中' : 'フォロー'}
-      </button>
-    </div>
+
+      {/* フォロー解除確認ダイアログ */}
+      {showConfirmModal && (
+        <div className="modal-overlay" onClick={() => setShowConfirmModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 360, padding: 24, textAlign: 'center', borderRadius: 20 }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: 8, color: 'var(--text-primary)' }}>
+              フォローを解除しますか？
+            </h3>
+            <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+              @{user.name} さんの限定投稿や更新情報が見られなくなります。
+            </p>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="btn btn-secondary"
+                style={{ flex: 1, borderRadius: 12 }}
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={confirmUnfollow}
+                style={{
+                  flex: 1, padding: '10px 0', borderRadius: 12, border: 'none',
+                  background: '#EF4444', color: 'white', fontWeight: 700, fontSize: '0.88rem',
+                  cursor: 'pointer',
+                }}
+              >
+                解除する
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

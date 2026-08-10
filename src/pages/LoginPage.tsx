@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 type Tab = 'login' | 'signup';
 
 export default function LoginPage() {
-  const { logIn, signUp } = useAuth();
+  const { login, signup } = useAuth();
   const [tab, setTab] = useState<Tab>('login');
 
   // ── ログインフォーム状態 ──────────────────────────────────────
@@ -30,7 +30,7 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
     try {
-      await logIn(loginEmail, loginPassword);
+      await login(loginEmail, loginPassword);
     } catch (err: unknown) {
       setError(getErrorMessage((err as { code?: string }).code ?? ''));
     }
@@ -48,7 +48,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       // プロフィール設定（ニックネーム等）は登録後に別画面で行うため、ここでは空文字を渡す
-      await signUp(signupEmail, signupPassword, "");
+      await signup(signupEmail, signupPassword, "");
     } catch (err: unknown) {
       setError(getErrorMessage((err as { code?: string }).code ?? ''));
     }

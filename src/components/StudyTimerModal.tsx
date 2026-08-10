@@ -7,10 +7,11 @@ import CreatePostModal from './CreatePostModal';
 interface StudyTimerModalProps {
   onClose: () => void;
   onPostCreated: () => void;
+  onToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-export default function StudyTimerModal({ onClose, onPostCreated }: StudyTimerModalProps) {
-  const [category, setCategory] = useState<Category>('SPI');
+export default function StudyTimerModal({ onClose, onPostCreated, onToast }: StudyTimerModalProps) {
+  const [category, setCategory] = useState<Category>('テスト');
   const [seconds, setSeconds] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
   const [showPostModal, setShowPostModal] = useState(false);
@@ -57,6 +58,7 @@ export default function StudyTimerModal({ onClose, onPostCreated }: StudyTimerMo
     return (
       <CreatePostModal
         defaultCategory={category}
+        defaultStudySeconds={seconds}
         onClose={() => {
           setShowPostModal(false);
           onClose();
@@ -152,7 +154,7 @@ export default function StudyTimerModal({ onClose, onPostCreated }: StudyTimerMo
             </button>
           )}
 
-          {seconds > 0 && (
+          {(!isRunning && seconds > 0) && (
             <button
               onClick={handleReset}
               className="btn btn-ghost btn-icon"
@@ -165,7 +167,7 @@ export default function StudyTimerModal({ onClose, onPostCreated }: StudyTimerMo
         </div>
 
         {/* 完了＆記録ボタン */}
-        {seconds >= 10 && (
+        {(!isRunning && seconds > 0) && (
           <button
             onClick={handleComplete}
             className="btn btn-primary"
@@ -176,7 +178,7 @@ export default function StudyTimerModal({ onClose, onPostCreated }: StudyTimerMo
               gap: 8,
             }}
           >
-            <CheckCircle2 size={18} /> {measuredMinutes}分間の取り組みを記録・投稿する
+            <CheckCircle2 size={18} /> この記録を投稿する？
           </button>
         )}
       </div>

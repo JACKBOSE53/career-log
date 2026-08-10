@@ -1,16 +1,27 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Bell, Mail, Plus, Target, Calendar,
   Trash2, X, AlertCircle, Clock, MapPin,
 } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 import {
-  getCurrentUser, getUnreadCount, getCountdowns, addCountdown, deleteCountdown,
-  getWeeklyGoal, updateWeeklyGoal, getPostsByUser, getCurrentUserId,
-} from '../db/store';
+  subscribeToUserPosts,
+  subscribeToCalendarEvents,
+  subscribeToWeeklyGoal,
+  setWeeklyGoal as setFirestoreWeeklyGoal,
+  addCalendarEvent,
+  deleteCalendarEvent,
+  formatFirestoreDate,
+  type FirestorePost,
+  type FirestoreCalendarEvent,
+  type FirestoreWeeklyGoal,
+} from '../db/firestore';
 import { CATEGORIES } from '../db/mockData';
 import type { CountdownEvent, WeeklyGoal, Category } from '../db/mockData';
 import VerticalTimePicker from './VerticalTimePicker';
 import VerticalNumberPicker from './VerticalNumberPicker';
+
+import { getLocalDateStr, getMondayOfCurrentWeek } from '../utils/dateUtils';
 
 interface ReportSectionProps {
   onUpdate: () => void;
@@ -32,7 +43,7 @@ function getPast7Days() {
       dateStr: `${d.getMonth() + 1}/${d.getDate()}`,
       dayName: dayNames[d.getDay()],
       isToday: i === 0,
-      isoDate: d.toISOString().split('T')[0],
+      isoDate: getLocalDateStr(d),
     });
   }
   return days;
@@ -48,11 +59,9 @@ function getDaysRemaining(targetDateStr: string): number {
 
 // 直近の月曜日を取得 (YYYY-MM-DD)
 function getRecentMondayStr(dateStr?: string): string {
-  const d = dateStr ? new Date(dateStr) : new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  const monday = new Date(d.setDate(diff));
-  return monday.toISOString().split('T')[0];
+  if (!dateStr) return getMondayOfCurrentWeek();
+  const d = new Date(dateStr);
+  return getMondayOfCurrentWeek(d);
 }
 
 // 月曜日ラベルフォーマット (例: 8/3(月)週)
@@ -63,16 +72,46 @@ function formatMondayLabel(dateStr?: string): string {
 }
 
 export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigateNotifications, hideHeaderTab, onToast }: ReportSectionProps) {
-  const me = getCurrentUser();
-  const unread = getUnreadCount();
+  const { profile: me, currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<'record' | 'timeline'>('record');
   const [periodFilter, setPeriodFilter] = useState<'week' | 'month' | 'total'>('week');
   const [summaryPeriod, setSummaryPeriod] = useState<'month' | 'total'>('total');
 
   // Store states
-  const [countdowns, setCountdowns] = useState<CountdownEvent[]>(() => getCountdowns());
-  const [weeklyGoal, setWeeklyGoal] = useState<WeeklyGoal>(() => getWeeklyGoal());
-  const myPosts = getPostsByUser(getCurrentUserId());
+  const [countdowns, setCountdowns] = useState<CountdownEvent[]>([]);
+  const [weeklyGoalData, setWeeklyGoalData] = useState<FirestoreWeeklyGoal | null>(null);
+  const [myPosts, setMyPosts] = useState<FirestorePost[]>([]);
+  const [postsLoading, setPostsLoading] = useState(true);
+
+  // Firestoreから自分の投稿・イベント・目標を取得
+  useEffect(() => {
+    if (!currentUser) return;
+    setPostsLoading(true);
+    const unsubPosts = subscribeToUserPosts(currentUser.uid, (posts) => {
+      setMyPosts(posts);
+      setPostsLoading(false);
+    });
+    const unsubEvents = subscribeToCalendarEvents(currentUser.uid, (events) => {
+      const mapped: CountdownEvent[] = events.map(e => ({
+        id: e.id || '',
+        title: e.title,
+        targetDate: e.date,
+        category: e.category,
+        time: e.time,
+        location: e.location,
+        priority: 'high',
+      }));
+      setCountdowns(mapped);
+    });
+    const unsubGoal = subscribeToWeeklyGoal(currentUser.uid, (goal) => {
+      setWeeklyGoalData(goal);
+    });
+    return () => {
+      unsubPosts();
+      unsubEvents();
+      unsubGoal();
+    };
+  }, [currentUser]);
 
   // Modal states
   const [showAddCountdown, setShowAddCountdown] = useState(false);
@@ -84,24 +123,29 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   const [newCdCategory, setNewCdCategory] = useState('ES');
 
   // Edit Goal states
-  const [goalTitle, setGoalTitle] = useState(weeklyGoal.title);
-  const [goalCategory, setGoalCategory] = useState<Category | '全体'>(weeklyGoal.category || '全体');
-  const [goalTargetType, setGoalTargetType] = useState<'minutes' | 'count'>(weeklyGoal.targetType || 'count');
-  const [goalUnit, setGoalUnit] = useState(weeklyGoal.unit || '社');
-  const [goalTarget, setGoalTarget] = useState(weeklyGoal.goalValue);
-  const [goalCurrent, setGoalCurrent] = useState(weeklyGoal.currentValue);
-  const [goalStartDate, setGoalStartDate] = useState(weeklyGoal.startDate || getRecentMondayStr());
+  const currentWeeklyTargetCategory = weeklyGoalData?.targetCategory ?? '全体';
+  const currentWeeklyTargetMinutes = weeklyGoalData?.targetMinutes ?? 120;
+
+  const [goalCategory, setGoalCategory] = useState<string>(currentWeeklyTargetCategory);
+  const [goalTargetMinutes, setGoalTargetMinutes] = useState<number>(currentWeeklyTargetMinutes);
+
+  useEffect(() => {
+    if (weeklyGoalData) {
+      setGoalCategory(weeklyGoalData.targetCategory);
+      setGoalTargetMinutes(weeklyGoalData.targetMinutes);
+    }
+  }, [weeklyGoalData]);
 
   // 計算値: 今日・今月・累計の取り組み時間
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getLocalDateStr();
   const thisMonthStr = todayStr.substring(0, 7);
 
   const todayMins = myPosts
-    .filter((p) => p.createdAt.startsWith(todayStr))
+    .filter((p) => formatFirestoreDate(p.createdAt).startsWith(todayStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const monthMins = myPosts
-    .filter((p) => p.createdAt.startsWith(thisMonthStr))
+    .filter((p) => formatFirestoreDate(p.createdAt).startsWith(thisMonthStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const totalMins = myPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
@@ -109,8 +153,9 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   // 分を「〇時間 〇分」のフォーマットに統一する関数
   function formatHoursMins(totalMins: number): string {
     if (totalMins <= 0) return '0時間 0分';
-    const hrs = Math.floor(totalMins / 60);
-    const mins = totalMins % 60;
+    const rounded = Math.ceil(totalMins);
+    const hrs = Math.floor(rounded / 60);
+    const mins = rounded % 60;
     if (hrs === 0) return `${mins}分`;
     if (mins === 0) return `${hrs}時間`;
     return `${hrs}時間 ${mins}分`;
@@ -118,28 +163,26 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
   // 7日間の日別学習時間とカテゴリ別内訳 (多色グラフィックグラフ用)
   const CATEGORY_COLOR_MAP: Record<string, string> = {
-    ES: '#60A5FA',
-    SPI: '#C084FC',
-    WEBテスト: '#38BDF8',
-    面接: '#FB7185',
-    OB訪問: '#FBBF24',
-    説明会: '#34D399',
-    自己分析: '#818CF8',
-    GD: '#F472B6',
-    インターン: '#FB923C',
-    その他: '#94A3B8',
+    ES: '#3B82F6', // ブルー
+    テスト: '#A855F7', // パープル
+    面接: '#EF4444', // パッションレッド
+    GD: '#EC4899', // ピンク
+    説明会: '#F59E0B', // アンバー
+    OB訪問: '#10B981', // エメラルドグリーン
+    インターン: '#F97316', // オレンジ
+    その他: '#94A3B8', // スレートグレー
   };
 
   // 期間フィルター ('week' | 'month' | 'total') に応じた動的投稿抽出
   const filteredPosts = myPosts.filter((p) => {
     if (periodFilter === 'week') {
-      const d = new Date(p.createdAt);
+      const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
       return d >= sevenDaysAgo;
     }
     if (periodFilter === 'month') {
-      return p.createdAt.startsWith(thisMonthStr);
+      return formatFirestoreDate(p.createdAt).startsWith(thisMonthStr);
     }
     return true; // total
   });
@@ -148,20 +191,17 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   let chartData: { label: string; mins: number; breakdown: Record<string, number>; isToday?: boolean }[] = [];
 
   if (periodFilter === 'week') {
-    // 【週】記録を始めた日（1日目）から今日までの経過日数（最大7日間）を動的生成
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // ユーザーの過去最古の記録日を取得 (無ければ今日)
     const sortedPostDates = myPosts
-      .map((p) => new Date(p.createdAt))
+      .map((p) => p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate())
       .filter((d) => !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
 
     const firstDate = sortedPostDates.length > 0 ? new Date(sortedPostDates[0]) : new Date();
     firstDate.setHours(0, 0, 0, 0);
 
-    // 記録開始からの経過日数 (1日目, 2日目... 最大7日)
     const elapsedDays = Math.max(
       1,
       Math.min(7, Math.floor((today.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24)) + 1)
@@ -171,17 +211,14 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     for (let i = elapsedDays - 1; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
-      const isoDate = d.toISOString().split('T')[0];
+      const isoDate = getLocalDateStr(d);
       const isToday = i === 0;
-      const dayLabel = isToday
-        ? '今日'
-        : `${d.getMonth() + 1}/${d.getDate()}`;
-
+      const dayLabel = isToday ? '今日' : `${d.getMonth() + 1}/${d.getDate()}`;
       activeDaysList.push({ isoDate, label: dayLabel, isToday });
     }
 
     chartData = activeDaysList.map((day) => {
-      const dayPosts = myPosts.filter((p) => p.createdAt.startsWith(day.isoDate));
+      const dayPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(day.isoDate));
       const mins = dayPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
       const breakdown: Record<string, number> = {};
       dayPosts.forEach((p) => {
@@ -191,10 +228,9 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       return { label: day.label, mins, breakdown, isToday: day.isToday };
     });
   } else if (periodFilter === 'month') {
-    // 【月】直近の週数に応じて 1週ずつ追加表示 (最大7本)
     const now = new Date();
     const sortedPostDates = myPosts
-      .map((p) => new Date(p.createdAt))
+      .map((p) => p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate())
       .filter((d) => !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
 
@@ -207,13 +243,13 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       const end = new Date(now); end.setDate(now.getDate() - i * 7);
       const start = new Date(end); start.setDate(end.getDate() - 6);
       const label = i === 0 ? '今週' : `${i}週前`;
-      weeks.push({ start, end, label, isCurrent: i === 0 });
+      weeks.push({ startDate: start, endDate: end, label, isCurrent: i === 0 });
     }
 
     chartData = weeks.map((w) => {
       const weekPosts = myPosts.filter((p) => {
-        const d = new Date(p.createdAt);
-        return d >= w.start && d <= w.end;
+        const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
+        return d >= w.startDate && d <= w.endDate;
       });
 
       const mins = weekPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
@@ -228,34 +264,36 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     // 【累計】最初の記録月〜今月までの経過月数に応じて 1ヶ月ずつ追加表示 (最大7本)
     const now = new Date();
     const sortedPostDates = myPosts
-      .map((p) => new Date(p.createdAt))
+      .map((p) => p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate())
       .filter((d) => !isNaN(d.getTime()))
       .sort((a, b) => a.getTime() - b.getTime());
 
     const firstDate = sortedPostDates.length > 0 ? new Date(sortedPostDates[0]) : new Date();
 
-    // 経過月数の計算
     const monthsDiff = (now.getFullYear() - firstDate.getFullYear()) * 12 + (now.getMonth() - firstDate.getMonth()) + 1;
-    const elapsedMonths = Math.max(1, Math.min(7, monthsDiff)); // 最大7ヶ月分
+    const elapsedMonths = Math.max(1, Math.min(7, monthsDiff));
 
-    const months = [];
+    const pastMonths = [];
     for (let i = elapsedMonths - 1; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const mStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       const label = i === 0 ? '今月' : `${d.getMonth() + 1}月`;
-      months.push({ mStr, label, isCurrent: i === 0 });
+      pastMonths.push({ mStr, label, isCurrent: i === 0 });
     }
-
-    chartData = months.map((m) => {
-      const mPosts = myPosts.filter((p) => p.createdAt.startsWith(m.mStr));
+    
+    chartData = [];
+    const limit = Math.min(7, pastMonths.length);
+    for (let i = 0; i < limit; i++) {
+      const m = pastMonths[limit - 1 - i];
+      const mPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(m.mStr));
       const mins = mPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
       const breakdown: Record<string, number> = {};
       mPosts.forEach((p) => {
         const cat = p.category || 'その他';
         breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 30);
       });
-      return { label: m.label, mins, breakdown, isToday: m.isCurrent };
-    });
+      chartData.push({ label: m.label, mins, breakdown, isToday: m.isCurrent });
+    }
   }
 
   const maxChartMins = Math.max(...chartData.map((d) => d.mins), 60);
@@ -273,22 +311,28 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   // 定量実績のカウント
   const esCount = myPosts.filter((p) => p.category === 'ES').length;
   const obCount = myPosts.filter((p) => p.category === 'OB訪問').length;
-  const interviewCount = myPosts.filter((p) => p.category === '面接').length;
+  const interviewCount = myPosts.filter((p) => p.category.includes('面接') || p.category.includes('面談')).length;
   const offerCount = myPosts.filter((p) => p.title.includes('内定') || p.content.includes('内定')).length;
 
-  // 目標達成率
-  const goalProgressPct = Math.min(100, Math.round((weeklyGoal.currentValue / weeklyGoal.goalValue) * 100));
+  // 今週の目標達成率
+  const thisWeekPosts = myPosts.filter((p) => {
+    const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    return d >= sevenDaysAgo && (currentWeeklyTargetCategory === '全体' || p.category === currentWeeklyTargetCategory);
+  });
+  const thisWeekMins = thisWeekPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
+  const goalProgressPct = Math.min(100, Math.round((thisWeekMins / currentWeeklyTargetMinutes) * 100));
 
-  function handleAddCountdown() {
-    if (!newCdTitle.trim() || !newCdDate) return;
-    const updated = addCountdown({
+  async function handleAddCountdown() {
+    if (!newCdTitle.trim() || !newCdDate || !currentUser) return;
+    await addCalendarEvent(currentUser.uid, {
       title: newCdTitle.trim(),
-      targetDate: newCdDate,
+      date: newCdDate,
       category: newCdCategory,
       time: newCdTime.trim() || undefined,
       location: newCdLocation.trim() || undefined,
     });
-    setCountdowns(updated);
     setShowAddCountdown(false);
     setNewCdTitle('');
     setNewCdDate('');
@@ -297,25 +341,14 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     onUpdate();
   }
 
-  function handleDeleteCd(id: string) {
-    const updated = deleteCountdown(id);
-    setCountdowns(updated);
+  async function handleDeleteCd(id: string) {
+    await deleteCalendarEvent(id);
     onUpdate();
   }
 
-  function handleSaveGoal() {
-    const isCompleted = Number(goalCurrent) >= Number(goalTarget);
-    const updated = updateWeeklyGoal({
-      title: goalTitle,
-      category: goalCategory,
-      targetType: goalTargetType,
-      unit: goalUnit,
-      startDate: goalStartDate,
-      goalValue: Number(goalTarget),
-      currentValue: Number(goalCurrent),
-      isCompleted,
-    });
-    setWeeklyGoal(updated);
+  async function handleSaveGoal() {
+    if (!currentUser) return;
+    await setFirestoreWeeklyGoal(currentUser.uid, goalCategory, Number(goalTargetMinutes) || 60);
     setShowGoalModal(false);
     onUpdate();
     onToast?.('今週の目標を保存しました', 'success');
@@ -337,14 +370,12 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{
                 width: 38, height: 38, borderRadius: '50%',
-                background: me.avatarUrl ? undefined : 'linear-gradient(135deg, #1E40AF, #3B82F6)',
-                backgroundImage: me.avatarUrl ? `url(${me.avatarUrl})` : undefined,
-                backgroundSize: 'cover', backgroundPosition: 'center',
+                background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '1.2rem', color: 'white',
                 boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
               }}>
-                {!me.avatarUrl && me.avatar}
+                {currentUser?.displayName?.[0] || 'U'}
               </div>
               <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
                 レポート
@@ -364,17 +395,6 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                 aria-label="通知"
               >
                 <Bell size={18} />
-                {unread > 0 && (
-                  <span style={{
-                    position: 'absolute', top: -2, right: -2,
-                    background: '#EF4444', color: 'white',
-                    fontSize: '0.65rem', fontWeight: 800,
-                    padding: '2px 5px', borderRadius: 99,
-                    border: '2px solid white',
-                  }}>
-                    {unread}
-                  </span>
-                )}
               </button>
 
               <button
@@ -578,73 +598,67 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             </div>
           </div>
 
-          {/* 棒グラフ (洗練されたスマート積層バー) */}
-          <div style={{ position: 'relative', height: 180, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', paddingTop: 24, marginBottom: 16 }}>
-            {/* シックな背景グリッド目盛り */}
-            <div style={{ position: 'absolute', inset: '0 0 24px 0', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', pointerEvents: 'none', opacity: 0.12 }}>
-              <div style={{ borderTop: '1px stroke var(--text-muted)' }} />
-              <div style={{ borderTop: '1px stroke var(--text-muted)' }} />
-              <div style={{ borderTop: '1px stroke var(--text-muted)' }} />
-            </div>
+          {/* 棒グラフ (クッキリ見やすいスタックバーチャート) */}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${chartData.length}, 1fr)`, gap: 10, height: 140, alignItems: 'flex-end', zIndex: 1 }}>
+            {chartData.map((d) => {
+              const heightPct = d.mins > 0 ? Math.max((d.mins / maxChartMins) * 100, 15) : 8;
+              const entries = Object.entries(d.breakdown);
 
-            {/* 積み上げマルチカラーBars (動的グリッド) */}
-            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${chartData.length}, 1fr)`, gap: 8, height: 135, alignItems: 'flex-end', zIndex: 1 }}>
-              {chartData.map((d) => {
-                const heightPct = (d.mins / maxChartMins) * 100;
-                const entries = Object.entries(d.breakdown);
+              return (
+                <div key={d.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
+                  {/* 上部時間ラベル */}
+                  <div style={{ fontSize: '0.68rem', fontWeight: 800, color: d.mins > 0 ? 'var(--color-primary)' : 'transparent', marginBottom: 6, whiteSpace: 'nowrap' }}>
+                    {d.mins > 0 ? formatHoursMins(d.mins) : ''}
+                  </div>
 
-                return (
-                  <div key={d.label} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', justifyContent: 'flex-end' }}>
-                    {/* 上部時間ラベル */}
-                    <div style={{ fontSize: '0.62rem', fontWeight: 700, color: d.mins > 0 ? 'var(--color-primary)' : 'transparent', marginBottom: 4, whiteSpace: 'nowrap' }}>
-                      {d.mins > 0 ? formatHoursMins(d.mins) : ''}
-                    </div>
+                  {/* クッキリ立った棒グラフバー */}
+                  <div style={{
+                    width: '100%', maxWidth: 28,
+                    height: `${heightPct}%`,
+                    borderRadius: '8px 8px 4px 4px',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column-reverse',
+                    background: d.mins > 0 ? 'transparent' : 'var(--bg-surface-2)',
+                    border: d.isToday ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+                    transition: 'all 0.3s ease',
+                    boxShadow: d.isToday ? '0 0 10px rgba(37, 99, 235, 0.25)' : 'none',
+                  }}>
+                    {d.mins > 0 ? (
+                      entries.map(([cat, m]) => {
+                        const segPct = (m / d.mins) * 100;
+                        const color = CATEGORY_COLOR_MAP[cat] || '#2563EB';
+                        return (
+                          <div
+                            key={cat}
+                            title={`${cat}: ${formatHoursMins(m)}`}
+                            style={{
+                              width: '100%',
+                              height: `${segPct}%`,
+                              background: color,
+                              transition: 'height 0.3s ease',
+                            }}
+                          />
+                        );
+                      })
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', background: 'var(--bg-surface-2)', opacity: 0.4 }} />
+                    )}
+                  </div>
 
-                    {/* 大人っぽいスタックバー */}
+                  {/* 日付ラベル */}
+                  <div style={{ marginTop: 8, textAlign: 'center' }}>
                     <div style={{
-                      width: '100%', maxWidth: 26,
-                      height: `${Math.max(heightPct, 6)}%`,
-                      borderRadius: 6,
-                      overflow: 'hidden',
-                      display: 'flex',
-                      flexDirection: 'column-reverse',
-                      background: d.mins > 0 ? 'transparent' : 'rgba(255,255,255,0.03)',
-                      border: d.isToday ? '1.5px solid var(--color-primary)' : '1px solid rgba(255,255,255,0.05)',
-                      boxShadow: d.isToday ? '0 0 12px var(--color-primary-glow)' : 'none',
-                      transition: 'all 0.3s ease',
+                      fontSize: '0.72rem',
+                      fontWeight: d.isToday ? 800 : 600,
+                      color: d.isToday ? 'var(--color-primary)' : 'var(--text-secondary)',
                     }}>
-                      {d.mins > 0 ? (
-                        entries.map(([cat, m]) => {
-                          const segPct = (m / d.mins) * 100;
-                          const color = CATEGORY_COLOR_MAP[cat] || '#94A3B8';
-                          return (
-                            <div
-                              key={cat}
-                              title={`${cat}: ${formatHoursMins(m)}`}
-                              style={{
-                                width: '100%',
-                                height: `${segPct}%`,
-                                background: color,
-                                opacity: 0.9,
-                              }}
-                            />
-                          );
-                        })
-                      ) : (
-                        <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.03)' }} />
-                      )}
-                    </div>
-
-                    {/* 日付ラベル */}
-                    <div style={{ marginTop: 6, textAlign: 'center' }}>
-                      <div style={{ fontSize: '0.68rem', fontWeight: d.isToday ? 800 : 500, color: d.isToday ? 'var(--color-primary)' : 'var(--text-muted)' }}>
-                        {d.label}
-                      </div>
+                      {d.label}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                </div>
+              );
+            })}
           </div>
 
           {/* ── ★ 選択期間に連動したタグごとの取り組み時間 (超シンプルテキスト表示) ── */}
@@ -680,63 +694,88 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
         {/* ── 6. 今週の目標 ── */}
         <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                今週の目標
-              </h2>
-              {weeklyGoal.startDate && (
-                <span className="badge" style={{ fontSize: '0.72rem', background: '#EFF6FF', color: '#2563EB', border: '1px solid #BFDBFE' }}>
-                  {formatMondayLabel(weeklyGoal.startDate)}
-                </span>
-              )}
-            </div>
-            <button
-              onClick={() => setShowGoalModal(true)}
-              className="btn btn-secondary btn-sm"
-              style={{ gap: 4, fontSize: '0.75rem', padding: '4px 10px' }}
-            >
-              <Target size={14} /> 目標設定
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            {/* 円形プログレスリング */}
-            <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
-              <svg width="72" height="72" viewBox="0 0 72 72">
-                <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
-                <circle
-                  cx="36" cy="36" r="30"
-                  stroke={goalProgressPct >= 100 ? '#16A34A' : '#3B82F6'}
-                  strokeWidth="6"
-                  fill="transparent"
-                  strokeDasharray={2 * Math.PI * 30}
-                  strokeDashoffset={2 * Math.PI * 30 * (1 - goalProgressPct / 100)}
-                  strokeLinecap="round"
-                  transform="rotate(-90 36 36)"
-                  style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                />
-              </svg>
+          {!weeklyGoalData ? (
+            /* 未設定時の登録誘導デザイン */
+            <div style={{ textAlign: 'center', padding: '12px 8px' }}>
               <div style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', flexDirection: 'column',
-                alignItems: 'center', justifyContent: 'center',
+                width: 48, height: 48, borderRadius: '50%',
+                background: 'rgba(59, 130, 246, 0.12)', color: 'var(--color-primary)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                margin: '0 auto 10px', border: '1px solid rgba(59, 130, 246, 0.3)',
               }}>
-                <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                  {goalProgressPct}%
-                </span>
+                <Target size={24} />
               </div>
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
+                今週の目標を設定してみよう！
+              </h3>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: 14 }}>
+                1週間の取り組み目標時間を決めてモチベーションを高めよう
+              </p>
+              <button
+                onClick={() => setShowGoalModal(true)}
+                className="btn btn-primary"
+                style={{ padding: '8px 20px', fontSize: '0.85rem', fontWeight: 700, borderRadius: 99, gap: 6 }}
+              >
+                <Plus size={16} /> 目標を設定する
+              </button>
             </div>
+          ) : (
+            /* 設定済み時のプログレス表示 */
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                    今週の目標 ({currentWeeklyTargetCategory})
+                  </h2>
+                </div>
+                <button
+                  onClick={() => setShowGoalModal(true)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: 4, fontSize: '0.75rem', padding: '4px 10px' }}
+                >
+                  <Target size={14} /> 編集
+                </button>
+              </div>
 
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>
-                {weeklyGoal.title || '1週間の目標を設定して100%達成を目指そう！'}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                {/* 円形プログレスリング */}
+                <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+                  <svg width="72" height="72" viewBox="0 0 72 72">
+                    <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
+                    <circle
+                      cx="36" cy="36" r="30"
+                      stroke={goalProgressPct >= 100 ? '#16A34A' : '#3B82F6'}
+                      strokeWidth="6"
+                      fill="transparent"
+                      strokeDasharray={2 * Math.PI * 30}
+                      strokeDashoffset={2 * Math.PI * 30 * (1 - goalProgressPct / 100)}
+                      strokeLinecap="round"
+                      transform="rotate(-90 36 36)"
+                      style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                    />
+                  </svg>
+                  <div style={{
+                    position: 'absolute', inset: 0,
+                    display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {goalProgressPct}%
+                    </span>
+                  </div>
+                </div>
+
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>
+                    {currentWeeklyTargetCategory} の取り組み目標
+                  </div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    進捗: {formatHoursMins(thisWeekMins)} / {formatHoursMins(currentWeeklyTargetMinutes)}
+                  </div>
+                </div>
               </div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                進捗: {weeklyGoal.currentValue} / {weeklyGoal.goalValue} {weeklyGoal.unit}
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -869,19 +908,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                   {[{ id: '全体', label: '全体' }, ...CATEGORIES].map((cat) => (
                     <button
                       key={cat.id}
-                      onClick={() => {
-                        const c = cat.id as any;
-                        setGoalCategory(c);
-                        if (c === 'SPI' || c === 'WEBテスト' || c === '自己分析') {
-                          setGoalTargetType('minutes');
-                          setGoalUnit('時間');
-                          setGoalTitle(`${c} 目標達成`);
-                        } else {
-                          setGoalTargetType('count');
-                          setGoalUnit('社/件/回');
-                          setGoalTitle(`${c === '全体' ? '就活記録' : c} 目標達成`);
-                        }
-                      }}
+                      onClick={() => setGoalCategory(cat.id)}
                       style={{
                         padding: '6px 14px', borderRadius: 99,
                         border: `1.5px solid ${goalCategory === cat.id ? 'var(--color-primary)' : 'var(--border-color)'}`,
@@ -897,75 +924,20 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                 </div>
               </div>
 
-              {/* 目標タイプの切替タブ (時間 OR 数) */}
-              <div style={{ display: 'flex', gap: 8, background: 'var(--bg-surface-2)', padding: 4, borderRadius: 12 }}>
-                <button
-                  onClick={() => {
-                    setGoalTargetType('minutes');
-                    setGoalUnit('時間');
-                    setGoalTitle(`${goalCategory} 時間目標`);
-                  }}
-                  style={{
-                    flex: 1, padding: '8px 0', border: 'none', borderRadius: 8,
-                    background: goalTargetType === 'minutes' ? 'var(--bg-surface)' : 'transparent',
-                    color: goalTargetType === 'minutes' ? 'var(--color-primary)' : 'var(--text-muted)',
-                    fontWeight: 700, fontSize: '0.825rem', cursor: 'pointer',
-                    boxShadow: goalTargetType === 'minutes' ? '0 2px 6px rgba(0,0,0,0.3)' : 'none',
-                  }}
-                >
-                  ⏱️ 時間で設定 (時間・分)
-                </button>
-                <button
-                  onClick={() => {
-                    setGoalTargetType('count');
-                    setGoalUnit('回/社');
-                    setGoalTitle(`${goalCategory === '全体' ? '就活記録' : goalCategory} 件数目標`);
-                  }}
-                  style={{
-                    flex: 1, padding: '8px 0', border: 'none', borderRadius: 8,
-                    background: goalTargetType === 'count' ? 'var(--bg-surface)' : 'transparent',
-                    color: goalTargetType === 'count' ? 'var(--color-primary)' : 'var(--text-muted)',
-                    fontWeight: 700, fontSize: '0.825rem', cursor: 'pointer',
-                    boxShadow: goalTargetType === 'count' ? '0 2px 6px rgba(0,0,0,0.3)' : 'none',
-                  }}
-                >
-                  🔢 数で設定 (1〜40件)
-                </button>
-              </div>
-
-              {/* 2. 上下スライドで目標数値/時間をピタッと合わせる */}
+              {/* 目標時間ピッカー */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
-                  2. 目標の{goalTargetType === 'minutes' ? '時間と分' : '数 (1〜40)'}を上下にスライド
+                  2. 目標取り組み時間を設定
                 </label>
-
-                {goalTargetType === 'minutes' ? (
-                  /* 時間・分スライドドラムピッカー */
-                  <VerticalTimePicker
-                    initialHour={5}
-                    initialMinute={0}
-                    minuteStep={1}
-                    onChange={(h, m, formatted) => {
-                      const totalMins = h * 60 + m;
-                      setGoalTarget(totalMins > 0 ? totalMins : 60);
-                      setGoalUnit('時間');
-                      setGoalTitle(`${goalCategory} ${formatted} 達成`);
-                    }}
-                  />
-                ) : (
-                  /* 1〜40件/社/回 スライドドラムピッカー */
-                  <VerticalNumberPicker
-                    initialValue={3}
-                    min={1}
-                    max={40}
-                    unit="件 / 社 / 回"
-                    onChange={(val) => {
-                      setGoalTarget(val);
-                      setGoalUnit('件');
-                      setGoalTitle(`${goalCategory === '全体' ? '就活記録' : goalCategory} ${val}件達成`);
-                    }}
-                  />
-                )}
+                <VerticalTimePicker
+                  initialHour={Math.floor(goalTargetMinutes / 60)}
+                  initialMinute={goalTargetMinutes % 60}
+                  minuteStep={5}
+                  onChange={(h, m) => {
+                    const totalMins = h * 60 + m;
+                    setGoalTargetMinutes(totalMins > 0 ? totalMins : 60);
+                  }}
+                />
               </div>
 
               {/* 決定ボタン */}

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Plus, RefreshCw, Users, Globe, Timer } from 'lucide-react';
-import { getFriendsPosts, getPublicPosts } from '../db/store';
-import type { Post } from '../db/mockData';
+import { subscribeToPosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
+import { isFollowing } from '../db/store';
+import { useAuth } from '../contexts/AuthContext';
 import PostCard from './PostCard';
 import CreatePostModal from './CreatePostModal';
 import StudyTimerModal from './StudyTimerModal';
@@ -9,33 +10,84 @@ import StudyTimerModal from './StudyTimerModal';
 interface TimelineProps {
   onUpdate: () => void;
   onProfileClick: (userId: string) => void;
+  onToast?: (message: string, type: 'success' | 'error') => void;
 }
 
 type FeedTab = 'friends' | 'everyone';
 
-export default function Timeline({ onUpdate, onProfileClick }: TimelineProps) {
-  const [feedTab, setFeedTab] = useState<FeedTab>('friends');
-  const [posts, setPosts] = useState<Post[]>([]);
+export default function Timeline({ onUpdate, onProfileClick, onToast }: TimelineProps) {
+  const [feedTab, setFeedTab] = useState<FeedTab>('everyone');
+  const [posts, setPosts] = useState<FirestorePost[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [followingUids, setFollowingUids] = useState<string[]>([]);
+  const { currentUser } = useAuth();
+  const myId = currentUser?.uid;
 
-  function refresh() {
-    setLoading(true);
-    setTimeout(() => {
-      setPosts(feedTab === 'friends' ? getFriendsPosts() : getPublicPosts());
-      setLoading(false);
-    }, 200);
-  }
+  const fetchPostsManually = () => {
+    const currentLocals = getLocalPosts();
+    setPosts((prevPosts) => {
+      const firestoreOnly = prevPosts.filter((p) => !p.id?.startsWith('local-post-'));
+      const map = new Map<string, FirestorePost>();
+      currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
+      firestoreOnly.forEach((p) => { if (p.id) map.set(p.id, p); });
+      return Array.from(map.values()).sort((a, b) => {
+        const getMillis = (dateVal: any) => {
+          if (!dateVal) return 0;
+          if (dateVal instanceof Date) return dateVal.getTime();
+          if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
+          return new Date(dateVal).getTime() || 0;
+        };
+        return getMillis(b.createdAt) - getMillis(a.createdAt);
+      });
+    });
+  };
 
   useEffect(() => {
-    refresh();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feedTab]);
+    setLoading(true);
+    const unsubscribe = subscribeToPosts((allPosts) => {
+      setPosts(allPosts);
+      setLoading(false);
+    });
+
+    const handleAutoUpdate = () => {
+      fetchPostsManually();
+    };
+
+    window.addEventListener('career_log_data_updated', handleAutoUpdate);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('career_log_data_updated', handleAutoUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!myId) return;
+    const unsub = subscribeToFollowingUids(myId, (uids) => {
+      setFollowingUids(uids);
+    });
+    return () => unsub();
+  }, [myId]);
+
+  // ユーザー指示に基づく厳格なプライバシーフィルター
+  const filteredPosts = posts.filter((post) => {
+    if (post.visibility === 'private') return false; // 個人限定は非表示
+
+    if (feedTab === 'everyone') {
+      // 「全員のタイムライン(みんなのひろば)」: 全体公開(public/未設定)のみ表示！
+      return post.visibility === 'public' || !post.visibility;
+    } else {
+      // 「友達のタイムライン」: 自分の投稿またはフォロー中の友達で、public か followers のものを表示！
+      const isMyPost = post.userId === myId || post.userId === 'user-me';
+      const isFriend = followingUids.includes(post.userId) || isFollowing(post.userId);
+      return (isMyPost || isFriend) && (post.visibility === 'public' || post.visibility === 'followers' || !post.visibility);
+    }
+  });
 
   function handlePostCreated() {
     setShowModal(false);
-    refresh();
+    fetchPostsManually();
     onUpdate();
   }
 
@@ -67,10 +119,11 @@ export default function Timeline({ onUpdate, onProfileClick }: TimelineProps) {
               <Timer size={15} /> タイマー
             </button>
             <button
-              onClick={refresh}
+              onClick={() => {}} // Firestoreの場合は自動同期なのでリロード不要
               className="btn btn-ghost btn-icon btn-sm"
-              style={{ color: 'var(--text-muted)' }}
-              aria-label="更新"
+              style={{ color: 'var(--text-muted)', opacity: 0.5, cursor: 'not-allowed' }}
+              aria-label="自動同期中"
+              title="Firestoreでリアルタイム同期中です"
             >
               <RefreshCw size={15} />
             </button>
@@ -184,18 +237,18 @@ export default function Timeline({ onUpdate, onProfileClick }: TimelineProps) {
             </div>
           ))}
         </div>
-      ) : posts.length === 0 ? (
+      ) : filteredPosts.length === 0 ? (
         <div className="empty-state" style={{ paddingTop: 60 }}>
           <span className="empty-state-icon">
             {feedTab === 'friends' ? '' : ''}
           </span>
           <p className="empty-state-title">
-            {feedTab === 'friends' ? 'フォロー中の人の投稿がありません' : '公開投稿がありません'}
+            {feedTab === 'friends' ? 'フォロー中の人の投稿がありません' : '全体公開の投稿がありません'}
           </p>
           <p className="empty-state-desc">
             {feedTab === 'friends'
-              ? '「すべての人」タブで他の就活生を見つけてフォローしよう！'
-              : '全体公開の投稿がまだありません'}
+              ? '「全員のタイムライン」タブで他の就活生を見つけてフォローしよう！'
+              : 'プロフィールや投稿で「全体公開」に設定された投稿が表示されます'}
           </p>
           {feedTab === 'friends' && (
             <button
@@ -204,7 +257,7 @@ export default function Timeline({ onUpdate, onProfileClick }: TimelineProps) {
               style={{ marginTop: 8, gap: 6 }}
             >
               <Globe size={15} />
-              すべての人を見る
+              全員のタイムラインを見る
             </button>
           )}
           <button
@@ -216,14 +269,15 @@ export default function Timeline({ onUpdate, onProfileClick }: TimelineProps) {
           </button>
         </div>
       ) : (
-        posts.map((post, i) => (
+        filteredPosts.map((post, i) => (
           <div key={post.id} style={{ animationDelay: `${i * 0.04}s` }}>
             <PostCard
               post={post}
-              onUpdate={refresh}
+              onUpdate={onUpdate}
               onProfileClick={onProfileClick}
               showFollowButton={feedTab === 'everyone'}
               onFollowUpdate={onUpdate}
+              onToast={onToast}
             />
           </div>
         ))

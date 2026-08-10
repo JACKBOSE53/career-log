@@ -1,9 +1,10 @@
-import { useState } from 'react';
-import { Home, Search, Bell, User, Plus, Sparkles, Calendar, Edit3, Timer, LogOut } from 'lucide-react';
-import { getCurrentUser, getUnreadCount } from '../db/store';
+import { useState, useEffect } from 'react';
+import { Home, Search, Users, Bell, User, Plus, Sparkles, Calendar, Edit3, Timer } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { getUnreadCount } from '../db/store';
+import { subscribeToUserProfile, type UserProfile } from '../db/firestore';
 
-export type Page = 'home' | 'calendar' | 'search' | 'notifications' | 'profile';
+export type Page = 'home' | 'calendar' | 'search' | 'communities' | 'notifications' | 'profile';
 
 interface SidebarProps {
   currentPage: Page;
@@ -23,8 +24,18 @@ const NAV_ITEMS = [
 
 
 export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreatePost, onOpenTimer }: SidebarProps) {
-  const me = getCurrentUser();
-  const { logOut } = useAuth();
+  const { currentUser } = useAuth();
+  const [me, setMe] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const unsubscribe = subscribeToUserProfile(currentUser.uid, (profile) => {
+      setMe(profile);
+    });
+    return () => unsubscribe();
+  }, [currentUser]);
+
+  if (!me) return null;
 
   return (
     <nav style={{
@@ -45,14 +56,13 @@ export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreate
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 38, height: 38, borderRadius: 10,
-            background: 'var(--gradient-primary)',
+            background: 'var(--color-primary)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
           }}>
             <Sparkles size={20} color="white" />
           </div>
           <div>
-            <div style={{ fontWeight: 800, fontSize: '1.125rem', background: 'var(--gradient-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', lineHeight: 1.1 }}>
+            <div style={{ fontWeight: 800, fontSize: '1.125rem', color: 'var(--text-primary)', lineHeight: 1.1 }}>
               CareerLog
             </div>
             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '0.05em' }}>
@@ -158,7 +168,6 @@ export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreate
             gap: 10,
             fontSize: '0.9375rem',
             justifyContent: 'flex-start',
-            boxShadow: '0 4px 16px rgba(15, 23, 42, 0.2)',
           }}
         >
           <Plus size={20} />
@@ -186,71 +195,43 @@ export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreate
         )}
       </div>
 
-      {/* Profile Footer + Logout */}
-      <div style={{ display: 'flex', gap: 8, alignItems: 'stretch', marginTop: 12 }}>
-        <button
-          onClick={() => onNavigate('profile')}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 12,
-            padding: '12px 14px',
-            borderRadius: 14,
-            border: 'none',
-            background: 'var(--bg-surface-2)',
-            cursor: 'pointer',
-            textAlign: 'left',
-            fontFamily: 'inherit',
-            flex: 1,
-            minWidth: 0,
-            transition: 'all var(--transition-fast)',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-hover)'; }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-2)'; }}
-        >
-          <span style={{
-            width: 36, height: 36, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.1rem', flexShrink: 0,
-          }}>
-            {me.avatar}
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontWeight: 600, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {me.name}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              @{me.handle}
-            </div>
+      {/* Profile Footer */}
+      <button
+        onClick={() => onNavigate('profile')}
+        style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '12px 14px',
+          borderRadius: 14,
+          border: 'none',
+          background: 'var(--bg-surface-2)',
+          cursor: 'pointer',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+          width: '100%',
+          marginTop: 12,
+          transition: 'all var(--transition-fast)',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-hover)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-2)'; }}
+      >
+        <span style={{
+          width: 36, height: 36, borderRadius: '50%',
+          background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.1rem', flexShrink: 0,
+        }}>
+          {me.avatar}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontWeight: 600, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {me.name}
           </div>
-          <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} title="オンライン" />
-        </button>
-
-        <button
-          onClick={() => logOut()}
-          title="ログアウト"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            width: 44,
-            borderRadius: 14,
-            border: 'none',
-            background: 'var(--bg-surface-2)',
-            color: 'var(--text-muted)',
-            cursor: 'pointer',
-            flexShrink: 0,
-            transition: 'all var(--transition-fast)',
-          }}
-          onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-hover)';
-            (e.currentTarget as HTMLButtonElement).style.color = '#EF4444';
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-surface-2)';
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-muted)';
-          }}
-        >
-          <LogOut size={18} />
-        </button>
-      </div>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {me.university}
+          </div>
+        </div>
+        <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#10B981', flexShrink: 0 }} title="オンライン" />
+      </button>
     </nav>
   );
 }

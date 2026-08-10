@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
 import { X, Globe, Lock, EyeOff, Clock, Image as ImageIcon } from 'lucide-react';
-import { CATEGORIES } from '../db/mockData';
+import { CATEGORIES, INTERVIEW_SUB_TAGS } from '../db/mockData';
 import type { Category } from '../db/mockData';
-import { createPost, getCurrentUser } from '../db/store';
+import { createPost } from '../db/firestore';
+import { useAuth } from '../contexts/AuthContext';
 import CategoryBadge from './CategoryBadge';
 import VerticalTimePicker from './VerticalTimePicker';
 import GoalAchievementModal from './GoalAchievementModal';
@@ -11,68 +12,106 @@ interface CreatePostModalProps {
   onClose: () => void;
   onPostCreated: () => void;
   defaultCategory?: Category;
+  defaultStudySeconds?: number;
   onToast?: (message: string, type: 'success' | 'error') => void;
 }
 
-export default function CreatePostModal({ onClose, onPostCreated, defaultCategory }: CreatePostModalProps) {
+export default function CreatePostModal({ onClose, onPostCreated, defaultCategory, defaultStudySeconds, onToast }: CreatePostModalProps) {
   const [category, setCategory] = useState<Category>(defaultCategory ?? 'ES');
+  const [selectedSubTag, setSelectedSubTag] = useState<string>('');
   const [content, setContent] = useState('');
   const [imageUrl, setImageUrl] = useState('');
+  // タイマーからの遷移でない場合は手動入力用に使うステート
   const [studyMinutes, setStudyMinutes] = useState('');
   const [visibility, setVisibility] = useState<'public' | 'followers' | 'private'>('public');
 
-  const [step, setStep] = useState<'category' | 'details'>('category');
+  const [step, setStep] = useState<'category' | 'details'>(defaultStudySeconds !== undefined ? 'details' : 'category');
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const me = getCurrentUser();
-  const needsStudyTime = category === 'SPI' || category === '自己分析';
+  const { currentUser } = useAuth();
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        if (ev.target?.result) {
-          setImageUrl(ev.target.result as string);
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_SIZE = 500; // 超軽量化（高画質を維持しつつ数10KBに圧縮）
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressed = canvas.toDataURL('image/jpeg', 0.70); // 高圧縮（完全0円用）
+          setImageUrl(compressed);
         }
       };
-      reader.readAsDataURL(file);
-    }
+      img.src = ev.target?.result as string;
+    };
+    reader.readAsDataURL(file);
   }
 
   const [achievedGoalTitle, setAchievedGoalTitle] = useState<string | null>(null);
 
-  function handleSubmit() {
-    if (!content.trim()) return;
+  async function handleSubmit() {
+    const userId = currentUser?.uid || 'user-me';
+    const finalContent = content.trim() || (selectedSubTag ? `${selectedSubTag}を行いました` : `${category}の活動を記録しました`);
+
     setSubmitting(true);
 
-    const autoTitle = content.trim().length > 20
-      ? content.trim().substring(0, 20) + '...'
-      : content.trim();
+    const autoTitle = selectedSubTag
+      ? `【${selectedSubTag}】${finalContent.length > 15 ? finalContent.substring(0, 15) + '...' : finalContent}`
+      : (finalContent.length > 20 ? finalContent.substring(0, 20) + '...' : finalContent);
 
-    setTimeout(() => {
-      const res = createPost({
-        category,
-        title: autoTitle,
-        content: content.trim(),
-        imageUrl: imageUrl.trim() || undefined,
-        tags: [],
-        studyMinutes: studyMinutes ? parseInt(studyMinutes) : undefined,
-        visibility: me.defaultVisibility || 'public',
-      });
-      setSubmitting(false);
+    const finalStudyMinutes = defaultStudySeconds !== undefined 
+      ? defaultStudySeconds / 60 
+      : (studyMinutes ? Number(studyMinutes) : undefined);
 
-      if (res.isGoalAchieved) {
-        setAchievedGoalTitle(res.goalTitle || '今週の目標');
-      } else {
-        onPostCreated();
-        onClose();
-      }
-    }, 400);
+    const postPayload = {
+      userId,
+      category,
+      title: autoTitle,
+      content: finalContent,
+      tags: selectedSubTag ? [selectedSubTag] : [],
+      studyMinutes: finalStudyMinutes,
+      imageUrl: imageUrl || undefined,
+      visibility,
+    };
+
+    // 1. まずLocalStorageとFirestoreへの保存を実行
+    try {
+      await createPost(postPayload);
+    } catch (e: any) {
+      console.error('Post creation error:', e);
+    }
+
+    // 2. 保存完了直後に画面更新とモーダル閉じる処理を実行
+    setSubmitting(false);
+    if (onToast) onToast('投稿が完了しました！', 'success');
+    onPostCreated();
+    onClose();
   }
 
-  const isValid = content.trim().length > 0;
+  const isValid = content.trim().length > 0 || selectedSubTag.length > 0 || true;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -85,12 +124,11 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
           borderRadius: '24px 24px 0 0',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: '1.25rem', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', borderRadius: '50%' }}>
-              {me.avatar}
+            <span style={{ fontSize: '1.25rem', width: 40, height: 40, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', borderRadius: '50%', color: 'white', fontWeight: 'bold' }}>
+              {currentUser?.displayName?.[0] || 'U'}
             </span>
             <div>
-              <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{me.name}</div>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>@{me.handle}</div>
+              <div style={{ fontWeight: 700, fontSize: '0.9375rem' }}>{currentUser?.displayName || 'ユーザー'}</div>
             </div>
           </div>
           <button onClick={onClose} className="btn btn-ghost btn-icon" style={{ color: 'var(--text-secondary)' }} aria-label="閉じる">
@@ -146,25 +184,70 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
               <CategoryBadge category={category} />
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              {/* Study time vertical drum picker for SPI/自己分析 */}
-              {needsStudyTime && (
-                <div>
-                  <label style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Clock size={16} color="var(--color-primary)" />
-                    取り組み時間 (上下スライドで時間・分を選択)
-                  </label>
-                  <VerticalTimePicker
-                    initialHour={1}
-                    initialMinute={30}
-                    minuteStep={1}
-                    onChange={(h, m) => {
-                      const totalMins = h * 60 + m;
-                      setStudyMinutes(totalMins > 0 ? String(totalMins) : '');
-                    }}
-                  />
+            {/* 面接が選択された時のサブタグ選択パネル (選択されたステップはタグ保存され、文章には挿入されません) */}
+            {category === '面接' && (
+              <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 14, background: 'rgba(239, 68, 68, 0.12)', border: '1.5px solid #EF4444' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 800, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                  <span>🗣️</span>
+                  <span>面接のステップを選択（どの選考かタップして指定）</span>
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                  {INTERVIEW_SUB_TAGS.map((tag) => {
+                    const isSelected = selectedSubTag === tag;
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => setSelectedSubTag(tag)}
+                        style={{
+                          padding: '6px 12px', borderRadius: 10,
+                          fontSize: '0.8rem', fontWeight: 800,
+                          background: isSelected ? '#EF4444' : 'var(--bg-surface)',
+                          color: isSelected ? 'white' : 'var(--text-primary)',
+                          border: `1.5px solid ${isSelected ? '#EF4444' : 'rgba(239, 68, 68, 0.4)'}`,
+                          cursor: 'pointer', transition: 'all 0.15s',
+                        }}
+                      >
+                        {isSelected ? '✓ ' : ''}{tag}
+                      </button>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* 全カテゴリ共通：取り組み時間ドラムピッカー */}
+              <div>
+                {defaultStudySeconds !== undefined ? (
+                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                    <label style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                      計測された集中時間
+                    </label>
+                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: '#10B981', fontFamily: 'monospace' }}>
+                      {String(Math.floor(defaultStudySeconds / 3600)).padStart(2, '0')}:
+                      {String(Math.floor((defaultStudySeconds % 3600) / 60)).padStart(2, '0')}:
+                      {String(defaultStudySeconds % 60).padStart(2, '0')}
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <label style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Clock size={16} color="var(--color-primary)" />
+                      取り組み時間 (上下スライドで時間・分を選択)
+                    </label>
+                    <VerticalTimePicker
+                      initialHour={0}
+                      initialMinute={30}
+                      minuteStep={1}
+                      onChange={(h, m) => {
+                        const totalMins = h * 60 + m;
+                        setStudyMinutes(totalMins > 0 ? String(totalMins) : '');
+                      }}
+                    />
+                  </>
+                )}
+              </div>
 
               {/* Content */}
               <div>
@@ -173,7 +256,7 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
                 </label>
                 <textarea
                   className="input textarea"
-                  placeholder="例：今日はSPIの言語領域を解いた！長文読解のスピードをもう少し意識しよう。"
+                  placeholder={category === '面接' ? "例：面接の雰囲気は和やかでした！自己PRの深掘り質問に落ち着いて答えられた。手ごたえや反省点を自由に記録しよう！" : "例：今日の就活アクティビティの記録や感想を自由に書こう！"}
                   value={content}
                   onChange={(e) => setContent(e.target.value)}
                   rows={4}
