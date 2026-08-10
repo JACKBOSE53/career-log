@@ -557,24 +557,22 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
           </div>
         )}
 
-        {/* ── ★ プロフィール専用タブ（レポート欄 / 投稿一覧）は本人のみに表示 ★ ── */}
-        {!isOwnProfile ? (
+        {/* ── ★ 取り組みレポート・投稿一覧の表示条件分岐 ★ ── */}
+        {(isPrivate && !isOwnProfile) ? (
           <div className="card" style={{ padding: '28px 20px', textAlign: 'center', margin: '20px 0', background: 'var(--bg-surface-2)', border: '1px solid var(--border-color)' }}>
             <div style={{ fontSize: '2rem', marginBottom: 8 }}>🔒</div>
             <h4 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>
-              取り組みレポート・投稿内容は非公開です
+              このアカウントは非公開です
             </h4>
             <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-              プライバシー保護のため、取り組み時間レポートや過去の投稿一覧は本人のみに表示されます。
+              プライバシー設定により、このプロフィールは本人のみに公開されています。
             </p>
           </div>
-        ) : (isPrivate || isFollowersOnly) ? (
+        ) : (isFollowersOnly && !isOwnProfile && !following) ? (
           <div className="card" style={{ padding: 40, textAlign: 'center', margin: '20px 0', border: '1px dashed var(--border-color)' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>
-              {isPrivate ? '🔒' : '👥'}
-            </div>
+            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>👥</div>
             <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
-              {isPrivate ? 'このアカウントは非公開です' : 'フォロワー限定公開のアカウントです'}
+              フォロワー限定公開のアカウントです
             </h3>
             <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 20 }}>
               {isPrivate
