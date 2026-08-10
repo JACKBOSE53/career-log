@@ -363,7 +363,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
           background: 'var(--bg-glass)',
           backdropFilter: 'blur(16px)',
           zIndex: 20,
-          borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+          borderBottom: '1px solid var(--border-color)',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px' }}>
             {/* 左: ユーザーアバター + タイトル */}
@@ -475,16 +475,16 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
           {/* 定量実績グリッド */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
             {[
-              { label: 'OB訪問', value: obCount, unit: '社', color: '#FBBF24', bg: '#78350F33', border: '#92400E55' },
-              { label: 'ES提出', value: esCount, unit: '社', color: '#60A5FA', bg: '#1E3A8A33', border: '#1E40AF55' },
-              { label: '面接', value: interviewCount, unit: '回', color: '#FB7185', bg: '#88133733', border: '#9F123955' },
-              { label: '内定', value: offerCount, unit: '社', color: '#34D399', bg: '#064E3B44', border: '#05966966', highlight: true },
+              { label: 'OB訪問', value: obCount, unit: '社', color: '#D97706', bg: '#FEF3C7', border: '#FDE68A' },
+              { label: 'ES提出', value: obCount === 0 && esCount === 0 ? 0 : esCount, unit: '社', color: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+              { label: '面接', value: interviewCount, unit: '回', color: '#E11D48', bg: '#FFF1F2', border: '#FECDD3' },
+              { label: '内定', value: offerCount, unit: '社', color: '#059669', bg: '#ECFDF5', border: '#A7F3D0', highlight: true },
             ].map((item) => (
               <div key={item.label} style={{
                 padding: '12px 6px', borderRadius: 12,
                 background: item.bg, border: `1.5px solid ${item.highlight ? 'var(--color-primary)' : item.border}`,
                 textAlign: 'center',
-                boxShadow: item.highlight ? '0 2px 8px rgba(0,0,0,0.3)' : 'none',
+                boxShadow: item.highlight ? 'var(--shadow-sm)' : 'none',
               }}>
                 <div style={{ fontSize: '0.7rem', fontWeight: 700, color: item.color, marginBottom: 2 }}>{item.label}</div>
                 <div style={{ fontSize: '1.2rem', fontWeight: 800, color: item.color }}>
@@ -496,7 +496,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
         </div>
 
         {/* ── 3. 就活取り組み推移 (大人っぽく洗練されたVIPスレートデザイン) ── */}
-        <div className="card" style={{ padding: 20, marginBottom: 16, border: '1px solid rgba(255, 255, 255, 0.12)' }}>
+        <div className="card" style={{ padding: 20, marginBottom: 16, border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
             <div>
               <h2 style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}>
