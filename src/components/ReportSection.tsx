@@ -11,7 +11,7 @@ import {
   setWeeklyGoal as setFirestoreWeeklyGoal,
   addCalendarEvent,
   deleteCalendarEvent,
-  formatFirestoreDate,
+  formatFirestoreDateLocal,
   type FirestorePost,
   type FirestoreCalendarEvent,
   type FirestoreWeeklyGoal,
@@ -172,11 +172,11 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   const thisMonthStr = todayStr.substring(0, 7);
 
   const todayMins = myPosts
-    .filter((p) => formatFirestoreDate(p.createdAt).startsWith(todayStr))
+    .filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(todayStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const monthMins = myPosts
-    .filter((p) => formatFirestoreDate(p.createdAt).startsWith(thisMonthStr))
+    .filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(thisMonthStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const totalMins = myPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
@@ -213,7 +213,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       return d >= sevenDaysAgo;
     }
     if (periodFilter === 'month') {
-      return formatFirestoreDate(p.createdAt).startsWith(thisMonthStr);
+      return formatFirestoreDateLocal(p.createdAt).startsWith(thisMonthStr);
     }
     return true; // total
   });
@@ -249,7 +249,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     }
 
     chartData = activeDaysList.map((day) => {
-      const dayPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(day.isoDate));
+      const dayPosts = myPosts.filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(day.isoDate));
       const mins = dayPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
       const breakdown: Record<string, number> = {};
       dayPosts.forEach((p) => {
@@ -316,7 +316,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     const limit = Math.min(7, pastMonths.length);
     for (let i = 0; i < limit; i++) {
       const m = pastMonths[limit - 1 - i];
-      const mPosts = myPosts.filter((p) => formatFirestoreDate(p.createdAt).startsWith(m.mStr));
+      const mPosts = myPosts.filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(m.mStr));
       const mins = mPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
       const breakdown: Record<string, number> = {};
       mPosts.forEach((p) => {

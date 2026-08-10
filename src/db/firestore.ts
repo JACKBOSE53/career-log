@@ -807,12 +807,26 @@ export function formatFirestoreDate(date: any): string {
       ? date 
       : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
     if (isNaN(d.getTime())) return '';
+    return d.toISOString();
+  } catch (e) {
+    console.warn('formatFirestoreDate error:', e);
+    return '';
+  }
+}
+
+export function formatFirestoreDateLocal(date: any): string {
+  if (!date) return '';
+  try {
+    const d = date instanceof Date 
+      ? date 
+      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
+    if (isNaN(d.getTime())) return '';
     const yyyy = d.getFullYear();
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     const dd = String(d.getDate()).padStart(2, '0');
     return `${yyyy}-${mm}-${dd}`;
   } catch (e) {
-    console.warn('formatFirestoreDate error:', e);
+    console.warn('formatFirestoreDateLocal error:', e);
     return '';
   }
 }
