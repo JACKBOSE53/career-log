@@ -641,8 +641,9 @@ export function subscribeToUserPosts(
 
   const postsCollection = collection(db, 'posts');
 
-  // 1. 自分の投稿を取得する場合：制限なくシンプルに全件購読
-  if (userId === currentUserId) {
+  // A. 自分の投稿、またはフォロー承認済みの相手の投稿の場合：
+  // 複合インデックス未作成エラーを避けるため、where('userId') だけの単一クエリ（インデックス不要）で全件安全に取得する
+  if (userId === currentUserId || isFollowingFriend) {
     const q = query(
       postsCollection,
       where('userId', '==', userId),
@@ -655,10 +656,15 @@ export function subscribeToUserPosts(
         return { ...data, id: doc.id, createdAt: date };
       }) as FirestorePost[];
 
+      // 自分以外の投稿で private が混ざっていた場合はフロントエンド側で除外する安全ガード
+      const filtered = userId === currentUserId 
+        ? firestorePosts 
+        : firestorePosts.filter(p => p.visibility !== 'private');
+
       const currentLocals = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
       const map = new Map<string, FirestorePost>();
       currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
-      firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
+      filtered.forEach((p) => { if (p.id) map.set(p.id, p); });
 
       const merged = Array.from(map.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
       callback(merged);
@@ -668,79 +674,11 @@ export function subscribeToUserPosts(
     });
   }
 
-  // 2. 他人の投稿を取得する場合：セキュリティルールを完全に満たすため、等価(==)クエリに分解して並列購読し、マージする
-  const unsubscribes: (() => void)[] = [];
-  const resultsMap = new Map<string, FirestorePost[]>();
-
-  // 各クエリの結合・ソート処理
-  const triggerMerge = () => {
-    const allPostsMap = new Map<string, FirestorePost>();
-    
-    // 全サブクエリの結果をマージ
-    resultsMap.forEach((postsList) => {
-      postsList.forEach((p) => {
-        if (p.id) allPostsMap.set(p.id, p);
-      });
-    });
-
-    // ローカル一時投稿（もしあれば）もマージ
-    const currentLocals = getLocalPosts().filter((p) => p.userId === userId);
-    currentLocals.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
-
-    const merged = Array.from(allPostsMap.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
-    callback(merged);
-  };
-
-  // サブクエリを登録・実行するヘルパー
-  const runSubQuery = (key: string, queryObj: import('firebase/firestore').Query) => {
-    const unsub = onSnapshot(queryObj, (snapshot: import('firebase/firestore').QuerySnapshot) => {
-      const posts = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-        return { ...data, id: doc.id, createdAt: date };
-      }) as FirestorePost[];
-      
-      resultsMap.set(key, posts);
-      triggerMerge();
-    }, (err: Error) => {
-      console.warn(`Firestore user posts sub-query (${key}) error:`, err);
-      // エラーが起きた場合でも空配列をセットしてマージを動かす！
-      resultsMap.set(key, []);
-      triggerMerge();
-    });
-    unsubscribes.push(unsub);
-  };
-
-  // サブクエリA: visibility == 'public'
-  const qPublic = query(
-    postsCollection,
-    where('userId', '==', userId),
-    where('visibility', '==', 'public')
-  );
-  runSubQuery('public', qPublic);
-
-  // サブクエリB: visibility == null
-  const qNull = query(
-    postsCollection,
-    where('userId', '==', userId),
-    where('visibility', '==', null)
-  );
-  runSubQuery('null', qNull);
-
-  // サブクエリC: visibility == 'followers' (フォロー中の場合のみ購読)
-  if (isFollowingFriend) {
-    const qFollowers = query(
-      postsCollection,
-      where('userId', '==', userId),
-      where('visibility', '==', 'followers')
-    );
-    runSubQuery('followers', qFollowers);
-  }
-
-  // 購読解除用クリーンアップ関数を返す
-  return () => {
-    unsubscribes.forEach((unsub) => unsub());
-  };
+  // B. まだフォローしていない他人の場合：
+  // 基本的に投稿は見せない（空配列を返す）ことで、複合インデックスエラーを完全に回避する
+  // （未フォローの他人の取り組み推移や投稿は、セキュリティ保護のため非公開になります）
+  callback([]);
+  return () => {};
 }
 
 export async function toggleLikePost(postId: string, userId: string, currentlyLiked: boolean) {
