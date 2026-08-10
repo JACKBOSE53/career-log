@@ -78,8 +78,8 @@ export async function sendFollowRequest(
   toUid: string,
   fromName?: string,
   fromAvatar?: string,
-): Promise<void> {
-  if (fromUid === toUid) return;
+): Promise<{ directlyFollowed: boolean }> {
+  if (fromUid === toUid) return { directlyFollowed: false };
 
   // 送信者の名前・アバターをFirestoreのユーザー文書から直接取得
   let senderName = fromName;
@@ -96,6 +96,56 @@ export async function sendFollowRequest(
     console.warn('Failed to fetch sender profile:', e);
   }
 
+  // 相手の公開設定（profileVisibility）を確認する
+  let targetVisibility: 'public' | 'followers' | 'private' = 'public';
+  try {
+    const targetSnap = await getDoc(doc(db, 'users', toUid));
+    if (targetSnap.exists()) {
+      const targetData = targetSnap.data();
+      targetVisibility = targetData.profileVisibility || 'public';
+    }
+  } catch (e) {
+    console.warn('Failed to fetch target user profile visibility:', e);
+  }
+
+  // A. 公開アカウントの場合：リクエストを送らず直接フォロー完了！
+  if (targetVisibility === 'public') {
+    try {
+      // 1. サブコレクションにフォロー情報を登録
+      await setDoc(doc(db, `users/${fromUid}/following`, toUid), { createdAt: serverTimestamp() });
+      await setDoc(doc(db, `users/${toUid}/followers`, fromUid), { createdAt: serverTimestamp() });
+
+      // 2. トップレベルの follows コレクションに登録
+      const followId = `${fromUid}_${toUid}`;
+      await setDoc(doc(db, 'follows', followId), {
+        followerId: fromUid,
+        followingId: toUid,
+        createdAt: serverTimestamp(),
+      });
+
+      // 3. フォロー・フォロワー数のカウントアップ
+      await setDoc(doc(db, 'users', toUid), { followersCount: increment(1) }, { merge: true });
+      await setDoc(doc(db, 'users', fromUid), { followingCount: increment(1) }, { merge: true });
+
+      // 4. 相手へのフォロー完了通知を送信
+      const notifData = {
+        type: 'follow_accept',
+        fromUid: fromUid,
+        fromName: senderName || 'ユーザー',
+        fromAvatar: senderAvatar || '',
+        text: 'あなたをフォローしました',
+        createdAt: serverTimestamp(),
+        isRead: false,
+      };
+      await addDoc(collection(db, `users/${toUid}/notifications`), notifData);
+
+      return { directlyFollowed: true };
+    } catch (e) {
+      console.error('Direct follow failed, falling back to follow request:', e);
+    }
+  }
+
+  // B. 鍵垢（followers / private）の場合：従来通り承認待ちリクエストを送信
   const reqData = {
     fromUid,
     toUid,
@@ -127,6 +177,8 @@ export async function sendFollowRequest(
   } catch (e) {
     console.warn('Top level followRequest add failed:', e);
   }
+
+  return { directlyFollowed: false };
 }
 
 /** 自分宛の未承認フォローリクエストをリアルタイム購読 */

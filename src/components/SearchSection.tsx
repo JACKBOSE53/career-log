@@ -188,13 +188,17 @@ function UserSearchCard({ user, onProfileClick, onUpdate }: { user: UserProfile;
     } else {
       setLoading(true);
       try {
-        await sendFollowRequest(
+        const res = await sendFollowRequest(
           currentUser.uid,
           user.id,
           myProfile?.name || currentUser.displayName || undefined,
           myProfile?.avatar || currentUser.photoURL || undefined,
         );
-        setRequestSent(true);
+        if (res.directlyFollowed) {
+          setFollowing(true);
+        } else {
+          setRequestSent(true);
+        }
       } finally {
         setLoading(false);
       }

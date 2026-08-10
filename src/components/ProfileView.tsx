@@ -108,14 +108,19 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
     setFollowLoading(true);
     try {
       // Firestoreにフォローリクエストを送信 (自分の名前・アバターを渡す)
-      await sendFollowRequest(
+      const res = await sendFollowRequest(
         currentUser.uid,
         userId,
         myProfile?.name || currentUser.displayName || undefined,
         myProfile?.avatar || currentUser.photoURL || undefined,
       );
-      setRequestSent(true);
-      onToast?.('フォローリクエストを送信しました！', 'success');
+      if (res.directlyFollowed) {
+        setFollowing(true);
+        onToast?.('フォローしました！', 'success');
+      } else {
+        setRequestSent(true);
+        onToast?.('フォローリクエストを送信しました！', 'success');
+      }
       onUpdate();
     } catch (e) {
       console.error(e);
