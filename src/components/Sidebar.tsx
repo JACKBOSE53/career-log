@@ -84,12 +84,12 @@ export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreate
                 width: '100%',
                 textAlign: 'left',
                 background: isActive
-                  ? 'rgba(255, 255, 255, 0.08)'
+                  ? 'var(--color-primary-glow)'
                   : 'transparent',
                 border: isActive
-                  ? '1px solid rgba(255, 255, 255, 0.2)'
+                  ? '1px solid var(--color-primary)'
                   : '1px solid transparent',
-                color: isActive ? '#FFFFFF' : 'var(--text-secondary)',
+                color: isActive ? 'var(--color-primary)' : 'var(--text-secondary)',
                 transition: 'all var(--transition-fast)',
                 fontWeight: isActive ? 700 : 500,
                 fontSize: '0.9375rem',
