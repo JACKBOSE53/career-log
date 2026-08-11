@@ -587,9 +587,37 @@ export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
       const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
       return { ...data, id: doc.id, createdAt: date };
     }) as FirestorePost[];
-    callback(posts);
   }, (err) => {
+    console.warn('Firestore subscribe error:', err);
+    callback([]);
   });
+}
+
+export function formatFirestoreDateLocal(date: any): string {
+  try {
+    if (!date) {
+      const now = new Date();
+      const yyyy = now.getFullYear();
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+    const d = date instanceof Date 
+      ? date 
+      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
+    if (isNaN(d.getTime())) {
+      const now = new Date();
+      return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    }
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  } catch (e) {
+    console.warn('formatFirestoreDateLocal error:', e);
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
 }
 
 export function getPostDateStr(post: { date?: string; createdAt?: any }): string {
@@ -812,22 +840,7 @@ export function formatFirestoreDate(date: any): string {
   }
 }
 
-export function formatFirestoreDateLocal(date: any): string {
-  if (!date) return '';
-  try {
-    const d = date instanceof Date 
-      ? date 
-      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
-    if (isNaN(d.getTime())) return '';
-    const yyyy = d.getFullYear();
-    const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const dd = String(d.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-  } catch (e) {
-    console.warn('formatFirestoreDateLocal error:', e);
-    return '';
-  }
-}
+
 
 // ─── Calendar Events ──────────────────────────────────────────────────────────
 export interface FirestoreCalendarEvent {

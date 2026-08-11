@@ -250,7 +250,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     }
 
     chartData = activeDaysList.map((day) => {
-      const dayPosts = myPosts.filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(day.isoDate));
+      const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(day.isoDate));
       const mins = dayPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
       const breakdown: Record<string, number> = {};
       dayPosts.forEach((p) => {
@@ -280,7 +280,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
     chartData = weeks.map((w) => {
       const weekPosts = myPosts.filter((p) => {
-        const d = p.createdAt instanceof Date ? p.createdAt : (p.createdAt as any).toDate();
+        const d = safeGetDate(p.createdAt);
         return d >= w.startDate && d <= w.endDate;
       });
 
