@@ -589,9 +589,14 @@ export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
     }) as FirestorePost[];
     callback(posts);
   }, (err) => {
-    console.warn('Firestore subscribe error:', err);
-    callback([]);
   });
+}
+
+export function getPostDateStr(post: { date?: string; createdAt?: any }): string {
+  if (post.date && /^\d{4}-\d{2}-\d{2}$/.test(post.date)) {
+    return post.date;
+  }
+  return formatFirestoreDateLocal(post.createdAt);
 }
 
 export function subscribeToUserPosts(
@@ -600,14 +605,11 @@ export function subscribeToUserPosts(
   isFollowingFriend: boolean,
   callback: (posts: FirestorePost[]) => void
 ) {
-  const localUserPosts = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
-  callback(localUserPosts);
-
   const postsCollection = collection(db, 'posts');
 
   // A. 自分の投稿を取得する場合：
-  // orderBy を使わない（serverTimestamp() 確定前のドキュメントが除外されるため）
-  // localStorage マージも廃止し、Firestore データのみを使用する（デバイス間の表示差異を防ぐ）
+  // orderBy を使わない（serverTimestamp() 確定前のドキュメントが除外されるのを防ぐ）
+  // ソートは JS 側で行い、記録直後に即座に即時集計されるようにする
   if (userId === currentUserId) {
     const q = query(postsCollection, where('userId', '==', userId));
     return onSnapshot(q, (snapshot) => {

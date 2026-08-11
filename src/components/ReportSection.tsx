@@ -12,6 +12,7 @@ import {
   addCalendarEvent,
   deleteCalendarEvent,
   formatFirestoreDateLocal,
+  getPostDateStr,
   type FirestorePost,
   type FirestoreCalendarEvent,
   type FirestoreWeeklyGoal,
@@ -172,11 +173,11 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   const thisMonthStr = todayStr.substring(0, 7);
 
   const todayMins = myPosts
-    .filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(todayStr))
+    .filter((p) => getPostDateStr(p).startsWith(todayStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const monthMins = myPosts
-    .filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(thisMonthStr))
+    .filter((p) => getPostDateStr(p).startsWith(thisMonthStr))
     .reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
 
   const totalMins = myPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
