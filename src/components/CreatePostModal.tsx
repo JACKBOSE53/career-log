@@ -77,8 +77,15 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       if (onToast) onToast('投稿するにはログインが必要です', 'error');
       return;
     }
+
+    const trimmedContent = content.trim();
+    if (!trimmedContent && !selectedSubTag) {
+      if (onToast) onToast('取り組み内容や一言メモを入力してください', 'error');
+      return;
+    }
+
     const userId = currentUser.uid;
-    const finalContent = content.trim() || (selectedSubTag ? `${selectedSubTag}を行いました` : `${category}の活動を記録しました`);
+    const finalContent = trimmedContent || (selectedSubTag ? `${selectedSubTag}を行いました` : `${category}の活動を記録しました`);
 
     setSubmitting(true);
 
@@ -119,7 +126,7 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
     }
   }
 
-  const isValid = content.trim().length > 0 || selectedSubTag.length > 0 || true;
+  const isValid = content.trim().length > 0 || selectedSubTag.length > 0;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -344,9 +351,9 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
             <button
               onClick={handleSubmit}
               className="btn btn-primary"
-              disabled={!isValid || submitting}
+              disabled={submitting}
               style={{
-                opacity: (!isValid || submitting) ? 0.6 : 1,
+                opacity: submitting ? 0.6 : 1,
                 width: '100%', padding: '14px 0', fontSize: '1rem', fontWeight: 800,
                 borderRadius: 14,
               }}
