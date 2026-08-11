@@ -86,20 +86,25 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       ? defaultStudySeconds / 60 
       : (studyMinutes ? Number(studyMinutes) : undefined);
 
-    const postPayload = {
+    const postPayload: Record<string, any> = {
       userId,
       category,
       title: autoTitle,
       content: finalContent,
       tags: selectedSubTag ? [selectedSubTag] : [],
-      studyMinutes: finalStudyMinutes,
-      imageUrl: imageUrl || undefined,
       visibility,
     };
 
+    if (finalStudyMinutes !== undefined && !isNaN(finalStudyMinutes)) {
+      postPayload.studyMinutes = finalStudyMinutes;
+    }
+    if (imageUrl) {
+      postPayload.imageUrl = imageUrl;
+    }
+
     // 1. まずLocalStorageとFirestoreへの保存を実行
     try {
-      await createPost(postPayload);
+      await createPost(postPayload as any);
     } catch (e: any) {
       console.error('Post creation error:', e);
     }

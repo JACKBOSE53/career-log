@@ -562,13 +562,20 @@ export function saveLocalPost(post: FirestorePost) {
 // ─── Posts ────────────────────────────────────────────────────────────────────
 export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt' | 'likesCount' | 'commentsCount'>) {
   const postsRef = collection(db, 'posts');
-  await addDoc(postsRef, {
-    ...postData,
+  const cleanData: Record<string, any> = {
     likesCount: 0,
     commentsCount: 0,
     likedUserIds: [],
     createdAt: serverTimestamp(),
+  };
+
+  Object.entries(postData).forEach(([key, val]) => {
+    if (val !== undefined) {
+      cleanData[key] = val;
+    }
   });
+
+  await addDoc(postsRef, cleanData);
 }
 
 function getMillis(dateVal: any): number {
