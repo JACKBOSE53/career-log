@@ -561,35 +561,14 @@ export function saveLocalPost(post: FirestorePost) {
 
 // ─── Posts ────────────────────────────────────────────────────────────────────
 export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt' | 'likesCount' | 'commentsCount'>) {
-  const now = new Date();
-  const tempId = 'local-post-' + Date.now() + '-' + Math.random().toString(36).substring(2, 7);
-
-  const localPostObj: FirestorePost = {
+  const postsRef = collection(db, 'posts');
+  await addDoc(postsRef, {
     ...postData,
-    id: tempId,
     likesCount: 0,
     commentsCount: 0,
     likedUserIds: [],
-    createdAt: now,
-  };
-
-  // 1. ローカルに0.0秒で保存（絶対に消えない・失敗しない）
-  saveLocalPost(localPostObj);
-  notifyDataUpdated();
-
-  // 2. Firestoreに保存を試みる
-  try {
-    const postsRef = collection(db, 'posts');
-    await addDoc(postsRef, {
-      ...postData,
-      likesCount: 0,
-      commentsCount: 0,
-      likedUserIds: [],
-      createdAt: serverTimestamp(),
-    });
-  } catch (e) {
-    console.warn('Firestore save skipped or failed, fallback to LocalStorage:', e);
-  }
+    createdAt: serverTimestamp(),
+  });
 }
 
 function getMillis(dateVal: any): number {
@@ -601,32 +580,17 @@ function getMillis(dateVal: any): number {
 }
 
 export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
-  // 即座にローカル投稿を届ける
-  callback(getLocalPosts());
-
   const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
   return onSnapshot(q, (snapshot) => {
-    const firestorePosts = snapshot.docs.map(doc => {
+    const posts = snapshot.docs.map(doc => {
       const data = doc.data();
       const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-      return {
-        ...data,
-        id: doc.id,
-        createdAt: date,
-      };
+      return { ...data, id: doc.id, createdAt: date };
     }) as FirestorePost[];
-
-    const currentLocals = getLocalPosts();
-    const map = new Map<string, FirestorePost>();
-
-    currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
-    firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
-
-    const merged = Array.from(map.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
-    callback(merged);
+    callback(posts);
   }, (err) => {
-    console.warn('Firestore subscribe error, using LocalStorage:', err);
-    callback(getLocalPosts());
+    console.warn('Firestore subscribe error:', err);
+    callback([]);
   });
 }
 
@@ -643,29 +607,20 @@ export function subscribeToUserPosts(
 
   // A. 自分の投稿を取得する場合：
   // orderBy を使わない（serverTimestamp() 確定前のドキュメントが除外されるため）
-  // ソートは JS 側で行う
+  // localStorage マージも廃止し、Firestore データのみを使用する（デバイス間の表示差異を防ぐ）
   if (userId === currentUserId) {
-    const q = query(
-      postsCollection,
-      where('userId', '==', userId)
-    );
+    const q = query(postsCollection, where('userId', '==', userId));
     return onSnapshot(q, (snapshot) => {
-      const firestorePosts = snapshot.docs.map(doc => {
+      const posts = snapshot.docs.map(doc => {
         const data = doc.data();
         const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
         return { ...data, id: doc.id, createdAt: date };
       }) as FirestorePost[];
-
-      const currentLocals = getLocalPosts().filter((p) => p.userId === userId || userId === 'user-me');
-      const map = new Map<string, FirestorePost>();
-      currentLocals.forEach((p) => { if (p.id) map.set(p.id, p); });
-      firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
-
-      const merged = Array.from(map.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
-      callback(merged);
+      const sorted = posts.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+      callback(sorted);
     }, (err) => {
-      console.warn('Firestore user posts subscribe error, using LocalStorage:', err);
-      callback(localUserPosts);
+      console.warn('Firestore user posts subscribe error:', err);
+      callback([]);
     });
   }
 
@@ -681,10 +636,6 @@ export function subscribeToUserPosts(
       resultsMap.forEach((postsList) => {
         postsList.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
       });
-
-      const currentLocals = getLocalPosts().filter((p) => p.userId === userId);
-      currentLocals.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
-
       const merged = Array.from(allPostsMap.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
       callback(merged);
     };
