@@ -73,7 +73,11 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
   const [achievedGoalTitle, setAchievedGoalTitle] = useState<string | null>(null);
 
   async function handleSubmit() {
-    const userId = currentUser?.uid || 'user-me';
+    if (!currentUser) {
+      if (onToast) onToast('投稿するにはログインが必要です', 'error');
+      return;
+    }
+    const userId = currentUser.uid;
     const finalContent = content.trim() || (selectedSubTag ? `${selectedSubTag}を行いました` : `${category}の活動を記録しました`);
 
     setSubmitting(true);
@@ -102,18 +106,17 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       postPayload.imageUrl = imageUrl;
     }
 
-    // 1. まずLocalStorageとFirestoreへの保存を実行
     try {
       await createPost(postPayload as any);
+      setSubmitting(false);
+      if (onToast) onToast('投稿が完了しました！', 'success');
+      onPostCreated();
+      onClose();
     } catch (e: any) {
       console.error('Post creation error:', e);
+      setSubmitting(false);
+      if (onToast) onToast(`投稿に失敗しました: ${e.message || '権限エラー'}`, 'error');
     }
-
-    // 2. 保存完了直後に画面更新とモーダル閉じる処理を実行
-    setSubmitting(false);
-    if (onToast) onToast('投稿が完了しました！', 'success');
-    onPostCreated();
-    onClose();
   }
 
   const isValid = content.trim().length > 0 || selectedSubTag.length > 0 || true;
