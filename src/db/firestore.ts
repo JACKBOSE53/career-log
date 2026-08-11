@@ -642,12 +642,12 @@ export function subscribeToUserPosts(
   const postsCollection = collection(db, 'posts');
 
   // A. 自分の投稿を取得する場合：
-  // 自分の投稿は visibility に関係なく全件取得でき、インデックスも既存のものが使用できるため、orderByを含めた単一クエリを実行
+  // orderBy を使わない（serverTimestamp() 確定前のドキュメントが除外されるため）
+  // ソートは JS 側で行う
   if (userId === currentUserId) {
     const q = query(
       postsCollection,
-      where('userId', '==', userId),
-      orderBy('createdAt', 'desc')
+      where('userId', '==', userId)
     );
     return onSnapshot(q, (snapshot) => {
       const firestorePosts = snapshot.docs.map(doc => {
