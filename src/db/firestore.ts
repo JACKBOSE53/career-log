@@ -124,8 +124,8 @@ export async function sendFollowRequest(
       });
 
       // 3. フォロー・フォロワー数のカウントアップ
-      await setDoc(doc(db, 'users', toUid), { followersCount: increment(1) }, { merge: true });
-      await setDoc(doc(db, 'users', fromUid), { followingCount: increment(1) }, { merge: true });
+      await updateDoc(doc(db, 'users', toUid), { followersCount: increment(1) });
+      await updateDoc(doc(db, 'users', fromUid), { followingCount: increment(1) });
 
       // 4. 相手へのフォロー完了通知を送信
       const notifData = {
@@ -275,8 +275,8 @@ export async function approveFollowRequest(
 
   // 4. フォロワー数/フォロー中数の更新
   try {
-    await setDoc(doc(db, 'users', toUid), { followersCount: increment(1) }, { merge: true });
-    await setDoc(doc(db, 'users', fromUid), { followingCount: increment(1) }, { merge: true });
+    await updateDoc(doc(db, 'users', toUid), { followersCount: increment(1) });
+    await updateDoc(doc(db, 'users', fromUid), { followingCount: increment(1) });
   } catch (e) {}
 
   // 5. 申請元ユーザーへ承認通知を送る
@@ -386,8 +386,8 @@ export async function unfollowUser(
 
   // 3. カウント更新
   try {
-    await setDoc(doc(db, 'users', targetUid), { followersCount: increment(-1) }, { merge: true });
-    await setDoc(doc(db, 'users', myUid), { followingCount: increment(-1) }, { merge: true });
+    await updateDoc(doc(db, 'users', targetUid), { followersCount: increment(-1) });
+    await updateDoc(doc(db, 'users', myUid), { followingCount: increment(-1) });
   } catch (e) {}
 }
 
