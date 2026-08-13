@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import CategoryBadge from './CategoryBadge';
 import VerticalTimePicker from './VerticalTimePicker';
 import GoalAchievementModal from './GoalAchievementModal';
+import { getLocalDateStr } from '../utils/dateUtils';
 
 interface CreatePostModalProps {
   onClose: () => void;
@@ -97,13 +98,17 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       ? defaultStudySeconds / 60 
       : (studyMinutes ? Number(studyMinutes) : undefined);
 
+    const todayStr = getLocalDateStr();
     const postPayload: Record<string, any> = {
       userId,
+      userName: currentUser.displayName || 'ユーザー',
+      userAvatar: currentUser.photoURL || '',
       category,
       title: autoTitle,
       content: finalContent,
       tags: selectedSubTag ? [selectedSubTag] : [],
-      visibility,
+      visibility: visibility || 'public',
+      date: todayStr,
     };
 
     if (finalStudyMinutes !== undefined && !isNaN(finalStudyMinutes)) {
