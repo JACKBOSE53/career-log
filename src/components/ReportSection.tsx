@@ -258,7 +258,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       const breakdown: Record<string, number> = {};
       dayPosts.forEach((p) => {
         const cat = p.category || 'その他';
-        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 30);
+        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 0);
       });
       return { label: day.label, mins, breakdown, isToday: day.isToday };
     });
@@ -291,7 +291,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       const breakdown: Record<string, number> = {};
       weekPosts.forEach((p) => {
         const cat = p.category || 'その他';
-        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 30);
+        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 0);
       });
       return { label: w.label, mins, breakdown, isToday: w.isCurrent };
     });
@@ -325,7 +325,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
       const breakdown: Record<string, number> = {};
       mPosts.forEach((p) => {
         const cat = p.category || 'その他';
-        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 30);
+        breakdown[cat] = (breakdown[cat] || 0) + (p.studyMinutes || 0);
       });
       chartData.push({ label: m.label, mins, breakdown, isToday: m.isCurrent });
     }
@@ -337,7 +337,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   const categoryDurations: Record<string, number> = {};
   filteredPosts.forEach((p) => {
     const catName = p.category || 'その他';
-    const mins = p.studyMinutes || 30;
+    const mins = p.studyMinutes || 0;
     categoryDurations[catName] = (categoryDurations[catName] || 0) + mins;
   });
 

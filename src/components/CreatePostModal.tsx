@@ -254,7 +254,7 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
                     </label>
                     <VerticalTimePicker
                       initialHour={0}
-                      initialMinute={30}
+                      initialMinute={0}
                       minuteStep={1}
                       onChange={(h, m) => {
                         const totalMins = h * 60 + m;
