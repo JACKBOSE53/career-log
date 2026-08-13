@@ -104,9 +104,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   const [newCategory, setNewCategory] = useState<string>('ES');
   const [newDate, setNewDate] = useState(() => getLocalDateStr());
   const [newEndDate, setNewEndDate] = useState(() => getLocalDateStr());
-  const [newTime, setNewTime] = useState('');
-  const [newEndTime, setNewEndTime] = useState('');
-  const [isMultiDay, setIsMultiDay] = useState(false);
   const [newLocation, setNewLocation] = useState('');
   const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('high');
 
@@ -129,12 +126,12 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   async function handleAddEvent() {
     if (!newDate) {
-      onToast?.('予定日を選択してください', 'error');
+      onToast?.('開始日を選択してください', 'error');
       return;
     }
     const effectiveUid = currentUser?.uid || 'user-me';
     const finalTitle = newTitle.trim() || `${newCategory}`;
-    const calculatedEndDate = isMultiDay && newEndDate ? (newEndDate >= newDate ? newEndDate : newDate) : newDate;
+    const calculatedEndDate = newEndDate && newEndDate >= newDate ? newEndDate : newDate;
 
     const eventData = {
       title: finalTitle,
@@ -143,18 +140,13 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       endDate: calculatedEndDate,
       category: newCategory,
       priority: newPriority,
-      time: newTime.trim() || undefined,
-      endTime: newEndTime.trim() || undefined,
       location: newLocation.trim() || undefined,
     };
 
     setShowAddModal(false);
     setNewCompany('');
     setNewTitle('');
-    setNewTime('');
-    setNewEndTime('');
     setNewLocation('');
-    setIsMultiDay(false);
 
     try {
       await addCalendarEvent(effectiveUid, eventData);
@@ -763,30 +755,16 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 />
               </div>
 
-              {/* 4. 予定期間 (開始日・終了日・複数日トグル) */}
+              {/* 4. 予定期間 (開始日・終了日) */}
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                    4. 予定の期間 <span style={{ color: '#EF4444' }}>*</span>
-                  </label>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      checked={isMultiDay}
-                      onChange={(e) => {
-                        setIsMultiDay(e.target.checked);
-                        if (e.target.checked && !newEndDate) setNewEndDate(newDate);
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    />
-                    複数日にまたがる予定 (例: インターン)
-                  </label>
-                </div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                  4. 選考期間 (始まりと終わり) <span style={{ color: '#EF4444' }}>*</span>
+                </label>
 
-                <div style={{ display: 'grid', gridTemplateColumns: isMultiDay ? '1fr 1fr' : '1fr', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                   <div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
-                      {isMultiDay ? '開始日' : '予定日'}
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-primary)', fontWeight: 800, display: 'block', marginBottom: 4 }}>
+                      開始日 (始まり) *
                     </span>
                     <input
                       type="date"
@@ -794,59 +772,31 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       value={newDate}
                       onChange={(e) => {
                         setNewDate(e.target.value);
-                        if (!isMultiDay || newEndDate < e.target.value) {
+                        if (newEndDate < e.target.value) {
                           setNewEndDate(e.target.value);
                         }
                       }}
-                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                      style={{ fontSize: '0.875rem', padding: '10px 11px', fontWeight: 700 }}
                     />
                   </div>
 
-                  {isMultiDay && (
-                    <div>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
-                        終了日
-                      </span>
-                      <input
-                        type="date"
-                        className="input"
-                        value={newEndDate}
-                        onChange={(e) => setNewEndDate(e.target.value)}
-                        min={newDate}
-                        style={{ fontSize: '0.875rem', padding: '10px 11px' }}
-                      />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* 5. 予定の時間 (開始時刻・終了時刻) */}
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
-                  5. 時間帯 (任意)
-                </label>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                   <div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>開始時間</span>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--color-primary)', fontWeight: 800, display: 'block', marginBottom: 4 }}>
+                      終了日 (終わり) *
+                    </span>
                     <input
-                      type="time"
+                      type="date"
                       className="input"
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
-                    />
-                  </div>
-                  <div>
-                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>終了時間</span>
-                    <input
-                      type="time"
-                      className="input"
-                      value={newEndTime}
-                      onChange={(e) => setNewEndTime(e.target.value)}
-                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                      value={newEndDate}
+                      onChange={(e) => setNewEndDate(e.target.value)}
+                      min={newDate}
+                      style={{ fontSize: '0.875rem', padding: '10px 11px', fontWeight: 700 }}
                     />
                   </div>
                 </div>
+                <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                  ※1日のみの予定の場合は「開始日」と「終了日」を同じ日付のまま保存してください。
+                </p>
               </div>
 
               {/* 4. 志望度の選択 (第一志望群 / 第二志望群 / 練習) */}
@@ -883,22 +833,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 </div>
               </div>
 
-              {/* 5. 開始時刻 (縦ドラムスライドピッカー) */}
-              <div>
-                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
-                  5. 開始時刻 <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>(上下スライドで選択)</span>
-                </label>
-                <VerticalTimePicker
-                  initialHour={14}
-                  initialMinute={0}
-                  minuteStep={1}
-                  hourUnit="時"
-                  onChange={(h, m) => {
-                    const formatted = `${String(h).padStart(2, '0')}時${String(m).padStart(2, '0')}分〜`;
-                    setNewTime(formatted);
-                  }}
-                />
-              </div>
+
 
               <button
                 onClick={handleAddEvent}
