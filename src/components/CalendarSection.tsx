@@ -294,47 +294,84 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   key={cell.dateStr}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
                   style={{
-                    height: 54, padding: '4px 2px', borderRadius: 10,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'space-between',
+                    minHeight: 62, padding: '4px 2px', borderRadius: 10,
+                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
                     cursor: 'pointer', transition: 'all 0.15s',
                     background: cell.isSelected ? 'var(--color-primary-glow)' : cell.isToday ? '#1E293B' : 'transparent',
                     border: `1.5px solid ${cell.isSelected ? 'var(--color-primary)' : cell.isToday ? 'var(--color-primary)' : 'transparent'}`,
+                    position: 'relative',
                   }}
                 >
                   <span style={{
                     fontSize: '0.8rem', fontWeight: cell.isSelected || cell.isToday ? 800 : 500,
                     color: cell.isSelected || cell.isToday ? 'var(--color-primary)' : 'var(--text-primary)',
+                    marginBottom: 2,
                   }}>
                     {cell.day}
                   </span>
 
-                  {/* 横バー (マルチデイカラーバー / イベント帯) */}
-                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2, padding: '0 1px', marginBottom: 2 }}>
+                  {/* ── 複数日カラーリボン帯 ＆ 単日イベントバー ── */}
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, overflow: 'visible', zIndex: 2 }}>
                     {cell.events.slice(0, 2).map((ev) => {
                       const style = getCategoryStyle(ev.category);
                       const isStart = cell.dateStr === ev.targetDate;
                       const isEnd = cell.dateStr === (ev.endDate || ev.targetDate);
-                      const isMulti = ev.endDate && ev.endDate !== ev.targetDate;
+                      const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
 
+                      // 曜日の判定 (週の頭 = 日曜日 = first day of row)
+                      const dateObj = new Date(cell.dateStr);
+                      const isWeekStart = dateObj.getDay() === 0;
+
+                      if (isMulti) {
+                        return (
+                          <div
+                            key={ev.id}
+                            style={{
+                              height: 18,
+                              background: style.text || 'var(--color-primary)',
+                              color: '#FFFFFF',
+                              fontSize: '0.65rem',
+                              fontWeight: 800,
+                              display: 'flex',
+                              alignItems: 'center',
+                              paddingLeft: isStart ? 6 : 2,
+                              paddingRight: isEnd ? 6 : 2,
+                              borderRadius: isStart && isEnd ? 6 : isStart ? '6px 0 0 6px' : isEnd ? '0 6px 6px 0' : 0,
+                              marginLeft: isStart ? 0 : -5,
+                              marginRight: isEnd ? 0 : -5,
+                              width: isStart && isEnd ? '100%' : isStart ? 'calc(100% + 5px)' : isEnd ? 'calc(100% + 5px)' : 'calc(100% + 10px)',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              position: 'relative',
+                            }}
+                            title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
+                          >
+                            {(isStart || isWeekStart) && (
+                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                {ev.company ? `${ev.company} ` : ''}{ev.title}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      // 単日イベントの場合
                       return (
                         <div
                           key={ev.id}
                           style={{
-                            height: isMulti ? 5 : 4,
+                            height: 4,
                             width: '100%',
                             background: style.text || 'var(--color-primary)',
-                            borderRadius: isMulti
-                              ? (isStart && isEnd ? 4 : isStart ? '4px 0 0 4px' : isEnd ? '0 4px 4px 0' : 0)
-                              : 4,
+                            borderRadius: 4,
                             boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
                           }}
                           title={`${ev.title} (${ev.category})`}
                         />
                       );
                     })}
-                    {cell.posts.length > 0 && cell.events.length < 3 && (
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10B981' }} />
-                    )}
                   </div>
                 </div>
               );
