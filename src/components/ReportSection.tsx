@@ -986,11 +986,83 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                 </div>
               </div>
 
-              {/* 目標時間ピッカー */}
+              {/* 目標時間ピッカー ＆ 直接数字入力 */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
                   2. 目標取り組み時間を設定
                 </label>
+                
+                {/* 2-A. 直接数字入力 (時間 & 分) */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="number"
+                      className="input"
+                      min="0"
+                      max="100"
+                      value={Math.floor(goalTargetMinutes / 60)}
+                      onChange={(e) => {
+                        const h = Math.max(0, Number(e.target.value) || 0);
+                        const m = goalTargetMinutes % 60;
+                        setGoalTargetMinutes(h * 60 + m);
+                      }}
+                      style={{ width: 75, padding: '8px 10px', fontSize: '1rem', fontWeight: 700, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>時間</span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <input
+                      type="number"
+                      className="input"
+                      min="0"
+                      max="59"
+                      step="5"
+                      value={goalTargetMinutes % 60}
+                      onChange={(e) => {
+                        const m = Math.max(0, Math.min(59, Number(e.target.value) || 0));
+                        const h = Math.floor(goalTargetMinutes / 60);
+                        setGoalTargetMinutes(h * 60 + m);
+                      }}
+                      style={{ width: 75, padding: '8px 10px', fontSize: '1rem', fontWeight: 700, textAlign: 'center' }}
+                    />
+                    <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>分</span>
+                  </div>
+
+                  <div style={{ fontSize: '0.85rem', color: 'var(--color-primary)', fontWeight: 800, marginLeft: 'auto' }}>
+                    合計: {Math.floor(goalTargetMinutes / 60)}時間{goalTargetMinutes % 60}分
+                  </div>
+                </div>
+
+                {/* 2-B. クイック時間選択ボタン */}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                  {[
+                    { label: '30分', mins: 30 },
+                    { label: '1時間', mins: 60 },
+                    { label: '2時間', mins: 120 },
+                    { label: '3時間', mins: 180 },
+                    { label: '5時間', mins: 300 },
+                    { label: '10時間', mins: 600 },
+                  ].map((p) => (
+                    <button
+                      key={p.label}
+                      type="button"
+                      onClick={() => setGoalTargetMinutes(p.mins)}
+                      style={{
+                        padding: '4px 10px', borderRadius: 8,
+                        border: `1px solid ${goalTargetMinutes === p.mins ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                        background: goalTargetMinutes === p.mins ? 'var(--color-primary)' : 'var(--bg-surface-2)',
+                        color: goalTargetMinutes === p.mins ? 'white' : 'var(--text-secondary)',
+                        fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                        transition: 'all 0.15s',
+                      }}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 2-C. スライドピッカー */}
                 <VerticalTimePicker
                   initialHour={Math.floor(goalTargetMinutes / 60)}
                   initialMinute={goalTargetMinutes % 60}
