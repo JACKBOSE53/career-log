@@ -587,13 +587,15 @@ function getMillis(dateVal: any): number {
 }
 
 export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
-  const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
+  const q = query(collection(db, 'posts'));
   return onSnapshot(q, (snapshot) => {
     const posts = snapshot.docs.map(doc => {
       const data = doc.data();
       const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
       return { ...data, id: doc.id, createdAt: date };
     }) as FirestorePost[];
+    const sorted = posts.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+    callback(sorted);
   }, (err) => {
     console.warn('Firestore subscribe error:', err);
     callback([]);
