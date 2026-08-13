@@ -81,11 +81,6 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
     }
 
     const trimmedContent = content.trim();
-    if (!trimmedContent && !selectedSubTag) {
-      if (onToast) onToast('取り組み内容や一言メモを入力してください', 'error');
-      return;
-    }
-
     const userId = currentUser.uid;
     const finalContent = trimmedContent || (selectedSubTag ? `${selectedSubTag}を行いました` : `${category}の活動を記録しました`);
 
@@ -132,7 +127,7 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
     }
   }
 
-  const isValid = content.trim().length > 0 || selectedSubTag.length > 0;
+  const isValid = true;
 
   return (
     <div className="modal-overlay" onClick={onClose}>
