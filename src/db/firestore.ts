@@ -901,17 +901,26 @@ export interface FirestoreWeeklyGoal {
   id?: string;
   userId: string;
   targetCategory: string;
-  targetMinutes: number;
+  targetMinutes?: number;
+  targetCount?: number;
 }
 
-export async function setWeeklyGoal(userId: string, targetCategory: string, targetMinutes: number) {
+export async function setWeeklyGoal(
+  userId: string,
+  targetCategory: string,
+  targetMinutes?: number,
+  targetCount?: number
+) {
   const ref = doc(db, 'weeklyGoals', userId);
-  await setDoc(ref, {
+  const data: Record<string, any> = {
     userId,
     targetCategory,
-    targetMinutes,
     updatedAt: serverTimestamp(),
-  }, { merge: true });
+  };
+  if (targetMinutes !== undefined) data.targetMinutes = targetMinutes;
+  if (targetCount !== undefined) data.targetCount = targetCount;
+
+  await setDoc(ref, data, { merge: true });
 }
 
 export function subscribeToWeeklyGoal(userId: string, callback: (goal: FirestoreWeeklyGoal | null) => void) {

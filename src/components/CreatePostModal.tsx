@@ -30,7 +30,8 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
   const [submitting, setSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const { currentUser } = useAuth();
+  const { currentUser, profile } = useAuth();
+  const effectiveVisibility = profile?.profileVisibility || 'public';
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -107,7 +108,7 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       title: autoTitle,
       content: finalContent,
       tags: selectedSubTag ? [selectedSubTag] : [],
-      visibility: visibility || 'public',
+      visibility: effectiveVisibility,
       date: todayStr,
     };
 

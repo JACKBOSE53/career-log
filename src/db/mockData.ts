@@ -6,7 +6,8 @@ export type Category =
   | '説明会'
   | 'OB訪問'
   | 'インターン'
-  | 'その他';
+  | 'その他'
+  | '内定';
 
 export type InterviewSubTag =
   | '1次面接'
@@ -35,8 +36,11 @@ export const CATEGORIES: { id: Category; label: string; emoji: string; color: st
   { id: '説明会', label: '説明会', emoji: '', color: '#F59E0B' },       // 鮮やかアンバー
   { id: 'OB訪問', label: 'OB訪問', emoji: '', color: '#10B981' },     // 鮮やかエメラルド
   { id: 'インターン', label: 'インターン', emoji: '', color: '#F97316' }, // 鮮やかオレンジ
+  { id: '内定', label: '内定', emoji: '🎉', color: '#059669' },       // ディープグリーン
   { id: 'その他', label: 'その他', emoji: '', color: '#64748B' },     // スレートグレー
 ];
+
+export const COUNT_TARGET_CATEGORIES: Category[] = ['ES', '面接', 'OB訪問', '内定'];
 
 export type JobStatus = '就活中' | '内定承諾済み' | '活動休止中' | 'OB/OG' | '未設定';
 

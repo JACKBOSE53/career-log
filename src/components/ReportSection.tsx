@@ -164,7 +164,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   useEffect(() => {
     if (weeklyGoalData) {
       setGoalCategory(weeklyGoalData.targetCategory);
-      setGoalTargetMinutes(weeklyGoalData.targetMinutes);
+      setGoalTargetMinutes(weeklyGoalData.targetMinutes ?? 120);
     }
   }, [weeklyGoalData]);
 
