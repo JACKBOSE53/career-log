@@ -15,6 +15,7 @@ import {
   type FirestoreCalendarEvent,
 } from '../db/firestore';
 import { CATEGORIES, INTERVIEW_SUB_TAGS, type CountdownEvent } from '../db/mockData';
+import CategoryBadge from './CategoryBadge';
 import VerticalTimePicker from './VerticalTimePicker';
 
 import { getLocalDateStr } from '../utils/dateUtils';
@@ -80,9 +81,15 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       }));
       setCountdowns(mapped);
     });
+    const handleAutoUpdate = () => {
+      onUpdate();
+    };
+    window.addEventListener('career_log_data_updated', handleAutoUpdate);
+
     return () => {
       unsubPosts();
       unsubEvents();
+      window.removeEventListener('career_log_data_updated', handleAutoUpdate);
     };
   }, [currentUser]);
 
@@ -396,6 +403,45 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
               })}
             </div>
           )}
+
+          {/* ── 2-B. 選択された日の活動記録 (Posts) ── */}
+          <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px dashed var(--border-color)' }}>
+            <div style={{ fontSize: '0.875rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              📝 この日の活動記録 ({selectedPosts.length}件)
+            </div>
+
+            {selectedPosts.length === 0 ? (
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', padding: '6px 0' }}>
+                この日の活動記録はありません
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {selectedPosts.map((post) => (
+                  <div key={post.id} style={{
+                    padding: '12px 14px', borderRadius: 12,
+                    background: 'var(--bg-surface-2)', border: '1px solid var(--border-color)',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <CategoryBadge category={post.category as any} size="sm" />
+                      {post.studyMinutes ? (
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-primary)' }}>
+                          ⏱ {post.studyMinutes}分
+                        </span>
+                      ) : null}
+                    </div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>
+                      {post.title}
+                    </div>
+                    {post.content && (
+                      <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', margin: 0, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {post.content}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── 3. 志望度別選考グループ（絵文字なし・シンプルデザイン） ── */}
