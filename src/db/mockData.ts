@@ -125,9 +125,11 @@ export interface CountdownEvent {
   id: string;
   title: string;
   company?: string;
-  targetDate: string; // YYYY-MM-DD
+  targetDate: string; // YYYY-MM-DD (開始日)
+  endDate?: string;   // YYYY-MM-DD (終了日)
   category: string;
-  time?: string; // 例: '14:00〜15:30'
+  time?: string;      // 例: '14:00' (開始時間)
+  endTime?: string;   // 例: '15:30' (終了時間)
   location?: string; // 例: 'オンライン (Zoom)' / 'テストセンター新宿'
   priority?: 'high' | 'medium' | 'low'; // 第一志望群 / 第二志望群 / 練習
 }

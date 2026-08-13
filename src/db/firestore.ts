@@ -936,8 +936,10 @@ export interface FirestoreCalendarEvent {
   userId: string;
   title: string;
   company?: string;
-  date: string;       // 'YYYY-MM-DD'
-  time?: string;
+  date: string;       // 開始日 'YYYY-MM-DD'
+  endDate?: string;    // 終了日 'YYYY-MM-DD'
+  time?: string;      // 開始時間 'HH:mm'
+  endTime?: string;   // 終了時間 'HH:mm'
   category: string;
   priority?: 'high' | 'medium' | 'low';
   location?: string;

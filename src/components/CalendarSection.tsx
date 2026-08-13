@@ -103,7 +103,10 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<string>('ES');
   const [newDate, setNewDate] = useState(() => getLocalDateStr());
+  const [newEndDate, setNewEndDate] = useState(() => getLocalDateStr());
   const [newTime, setNewTime] = useState('');
+  const [newEndTime, setNewEndTime] = useState('');
+  const [isMultiDay, setIsMultiDay] = useState(false);
   const [newLocation, setNewLocation] = useState('');
   const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('high');
 
@@ -131,13 +134,17 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     }
     const effectiveUid = currentUser?.uid || 'user-me';
     const finalTitle = newTitle.trim() || `${newCategory}`;
+    const calculatedEndDate = isMultiDay && newEndDate ? (newEndDate >= newDate ? newEndDate : newDate) : newDate;
+
     const eventData = {
       title: finalTitle,
       company: newCompany.trim() || undefined,
       date: newDate,
+      endDate: calculatedEndDate,
       category: newCategory,
       priority: newPriority,
       time: newTime.trim() || undefined,
+      endTime: newEndTime.trim() || undefined,
       location: newLocation.trim() || undefined,
     };
 
@@ -145,7 +152,9 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     setNewCompany('');
     setNewTitle('');
     setNewTime('');
+    setNewEndTime('');
     setNewLocation('');
+    setIsMultiDay(false);
 
     try {
       await addCalendarEvent(effectiveUid, eventData);
@@ -173,8 +182,12 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     }, 350);
   }
 
-  // 選択中の日付に該当するカウントダウンイベントと投稿記録
-  const selectedEvents = countdowns.filter((cd) => cd.targetDate === selectedDateStr);
+  // 選択中の日付に該当するカウントダウンイベント (単日および複数日跨ぎに対応)
+  const selectedEvents = countdowns.filter((cd) => {
+    const start = cd.targetDate;
+    const end = cd.endDate || cd.targetDate;
+    return start <= selectedDateStr && selectedDateStr <= end;
+  });
   const selectedPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(selectedDateStr));
 
   // カレンダーマスの生成
@@ -186,7 +199,11 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   // 日付セル
   for (let d = 1; d <= daysInMonth; d++) {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dayEvents = countdowns.filter((cd) => cd.targetDate === dStr);
+    const dayEvents = countdowns.filter((cd) => {
+      const start = cd.targetDate;
+      const end = cd.endDate || cd.targetDate;
+      return start <= dStr && dStr <= end;
+    });
     const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
     calendarCells.push({
       day: d,
@@ -291,15 +308,28 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                     {cell.day}
                   </span>
 
-                  {/* ドットインジケーター */}
-                  <div style={{ display: 'flex', gap: 2, height: 12, alignItems: 'center' }}>
-                    {cell.events.slice(0, 3).map((ev) => {
+                  {/* 横バー (マルチデイカラーバー / イベント帯) */}
+                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 2, padding: '0 1px', marginBottom: 2 }}>
+                    {cell.events.slice(0, 2).map((ev) => {
                       const style = getCategoryStyle(ev.category);
+                      const isStart = cell.dateStr === ev.targetDate;
+                      const isEnd = cell.dateStr === (ev.endDate || ev.targetDate);
+                      const isMulti = ev.endDate && ev.endDate !== ev.targetDate;
+
                       return (
-                        <div key={ev.id} style={{
-                          width: 6, height: 6, borderRadius: '50%',
-                          background: style.text,
-                        }} />
+                        <div
+                          key={ev.id}
+                          style={{
+                            height: isMulti ? 5 : 4,
+                            width: '100%',
+                            background: style.text || 'var(--color-primary)',
+                            borderRadius: isMulti
+                              ? (isStart && isEnd ? 4 : isStart ? '4px 0 0 4px' : isEnd ? '0 4px 4px 0' : 0)
+                              : 4,
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                          }}
+                          title={`${ev.title} (${ev.category})`}
+                        />
                       );
                     })}
                     {cell.posts.length > 0 && cell.events.length < 3 && (
@@ -395,13 +425,19 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         {ev.title}
                       </div>
 
-                      {ev.time && (
-                        <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <Clock size={12} color="var(--text-muted)" /> {ev.time}
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                        {(ev.time || ev.endTime) && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
+                            <Clock size={12} color="var(--color-primary)" />
+                            {ev.time ? (ev.endTime ? `${ev.time} 〜 ${ev.endTime}` : `${ev.time} 開始`) : `〜 ${ev.endTime}`}
                           </span>
-                        </div>
-                      )}
+                        )}
+                        {ev.endDate && ev.endDate !== ev.targetDate && (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', fontWeight: 700 }}>
+                            🗓 期間: {ev.targetDate.slice(5).replace('-', '/')} 〜 {ev.endDate.slice(5).replace('-', '/')}
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     <button
@@ -729,18 +765,90 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 />
               </div>
 
-              {/* 3. 予定日 */}
+              {/* 4. 予定期間 (開始日・終了日・複数日トグル) */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                    4. 予定の期間 <span style={{ color: '#EF4444' }}>*</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-primary)', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={isMultiDay}
+                      onChange={(e) => {
+                        setIsMultiDay(e.target.checked);
+                        if (e.target.checked && !newEndDate) setNewEndDate(newDate);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                    複数日にまたがる予定 (例: インターン)
+                  </label>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: isMultiDay ? '1fr 1fr' : '1fr', gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                      {isMultiDay ? '開始日' : '予定日'}
+                    </span>
+                    <input
+                      type="date"
+                      className="input"
+                      value={newDate}
+                      onChange={(e) => {
+                        setNewDate(e.target.value);
+                        if (!isMultiDay || newEndDate < e.target.value) {
+                          setNewEndDate(e.target.value);
+                        }
+                      }}
+                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                    />
+                  </div>
+
+                  {isMultiDay && (
+                    <div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>
+                        終了日
+                      </span>
+                      <input
+                        type="date"
+                        className="input"
+                        value={newEndDate}
+                        onChange={(e) => setNewEndDate(e.target.value)}
+                        min={newDate}
+                        style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 5. 予定の時間 (開始時刻・終了時刻) */}
               <div>
                 <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
-                  3. 予定日 <span style={{ color: '#EF4444' }}>*</span>
+                  5. 時間帯 (任意)
                 </label>
-                <input
-                  type="date"
-                  className="input"
-                  value={newDate}
-                  onChange={(e) => setNewDate(e.target.value)}
-                  style={{ fontSize: '0.875rem', padding: '10px 11px' }}
-                />
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>開始時間</span>
+                    <input
+                      type="time"
+                      className="input"
+                      value={newTime}
+                      onChange={(e) => setNewTime(e.target.value)}
+                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                    />
+                  </div>
+                  <div>
+                    <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', display: 'block', marginBottom: 2 }}>終了時間</span>
+                    <input
+                      type="time"
+                      className="input"
+                      value={newEndTime}
+                      onChange={(e) => setNewEndTime(e.target.value)}
+                      style={{ fontSize: '0.875rem', padding: '10px 11px' }}
+                    />
+                  </div>
+                </div>
               </div>
 
               {/* 4. 志望度の選択 (第一志望群 / 第二志望群 / 練習) */}
