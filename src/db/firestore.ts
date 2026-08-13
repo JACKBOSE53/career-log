@@ -602,6 +602,81 @@ export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
   });
 }
 
+export function subscribeToTimelinePosts(
+  currentUserId: string | undefined,
+  callback: (posts: FirestorePost[]) => void
+) {
+  const postsCollection = collection(db, 'posts');
+  const unsubscribes: (() => void)[] = [];
+  const resultsMap = new Map<string, FirestorePost[]>();
+
+  const triggerMerge = () => {
+    const allPostsMap = new Map<string, FirestorePost>();
+    resultsMap.forEach((postsList) => {
+      postsList.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
+    });
+    const merged = Array.from(allPostsMap.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
+    callback(merged);
+  };
+
+  // 1. 全体公開 (public)
+  const qPublic = query(postsCollection, where('visibility', '==', 'public'));
+  const unsubPublic = onSnapshot(qPublic, (snapshot) => {
+    const posts = snapshot.docs.map(doc => {
+      const data = doc.data();
+      const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+      return { ...data, id: doc.id, createdAt: date };
+    }) as FirestorePost[];
+    resultsMap.set('public', posts);
+    triggerMerge();
+  }, (err) => {
+    console.warn('subscribeToTimelinePosts public error:', err);
+    resultsMap.set('public', []);
+    triggerMerge();
+  });
+  unsubscribes.push(unsubPublic);
+
+  if (currentUserId) {
+    // 2. 自分の全投稿
+    const qMine = query(postsCollection, where('userId', '==', currentUserId));
+    const unsubMine = onSnapshot(qMine, (snapshot) => {
+      const posts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        return { ...data, id: doc.id, createdAt: date };
+      }) as FirestorePost[];
+      resultsMap.set('mine', posts);
+      triggerMerge();
+    }, (err) => {
+      console.warn('subscribeToTimelinePosts mine error:', err);
+      resultsMap.set('mine', []);
+      triggerMerge();
+    });
+    unsubscribes.push(unsubMine);
+
+    // 3. 友達限定 (followers) 投稿
+    const qFollowers = query(postsCollection, where('visibility', '==', 'followers'));
+    const unsubFollowers = onSnapshot(qFollowers, (snapshot) => {
+      const posts = snapshot.docs.map(doc => {
+        const data = doc.data();
+        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+        return { ...data, id: doc.id, createdAt: date };
+      }) as FirestorePost[];
+      resultsMap.set('followers', posts);
+      triggerMerge();
+    }, (err) => {
+      console.warn('subscribeToTimelinePosts followers error:', err);
+      resultsMap.set('followers', []);
+      triggerMerge();
+    });
+    unsubscribes.push(unsubFollowers);
+  }
+
+  return () => {
+    unsubscribes.forEach(unsub => unsub());
+  };
+}
+
 export function formatFirestoreDateLocal(date: any): string {
   try {
     if (!date) {

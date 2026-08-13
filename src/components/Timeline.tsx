@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Plus, RefreshCw, Users, Globe, Timer } from 'lucide-react';
-import { subscribeToPosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
+import { subscribeToTimelinePosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
 import { isFollowing } from '../db/store';
 import { useAuth } from '../contexts/AuthContext';
 import PostCard from './PostCard';
@@ -49,7 +49,7 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
 
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = subscribeToPosts((allPosts) => {
+    const unsubscribe = subscribeToTimelinePosts(myId, (allPosts) => {
       latestFirestorePosts.current = allPosts;
       mergeAndSetPosts(allPosts);
     });
@@ -63,7 +63,7 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
       unsubscribe();
       window.removeEventListener('career_log_data_updated', handleAutoUpdate);
     };
-  }, []);
+  }, [myId]);
 
   useEffect(() => {
     if (!myId) return;
