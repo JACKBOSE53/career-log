@@ -912,6 +912,16 @@ export function subscribeToComments(postId: string, callback: (comments: Firesto
   });
 }
 
+export async function deleteNotificationFirestore(userId: string, notifId: string) {
+  try {
+    const ref = doc(db, 'users', userId, 'notifications', notifId);
+    await deleteDoc(ref);
+    notifyDataUpdated();
+  } catch (err) {
+    console.warn('deleteNotificationFirestore error:', err);
+  }
+}
+
 // ─── Utilities ────────────────────────────────────────────────────────────────
 // FirestoreのTimestamp型を文字列に変換（UI表示用）
 export function formatFirestoreDate(date: any): string {
