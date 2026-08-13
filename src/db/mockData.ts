@@ -156,10 +156,11 @@ export interface AchievementBadge {
 }
 
 export const INITIAL_COUNTDOWNS: CountdownEvent[] = [
-  { id: 'cd-1', title: 'リクルート 本選考ES締切', targetDate: '2026-08-15', category: 'ES', time: '23:59まで', location: 'マイページ', priority: 'high' },
-  { id: 'cd-2', title: 'サイバーエージェント 一次面接', targetDate: '2026-08-20', category: '面接', time: '14:00〜15:00', location: 'オンライン (Zoom)', priority: 'high' },
-  { id: 'cd-3', title: 'アクセンチュア WEBテスト受験', targetDate: '2026-08-25', category: 'WEBテスト', time: '18:00〜', location: '自宅 / マイページ', priority: 'medium' },
-  { id: 'cd-4', title: '野村総合研究所 ジョブ開催', targetDate: '2026-09-01', category: 'インターン', time: '10:00〜18:00', location: '東京本社 3F', priority: 'low' },
+  { id: 'cd-1', title: 'リクルート 本選考ES締切', targetDate: '2026-08-15', endDate: '2026-08-15', category: 'ES', time: '23:59まで', location: 'マイページ', priority: 'high' },
+  { id: 'cd-multi-1', title: 'サイバーエージェント 夏インターンシップ', targetDate: '2026-08-18', endDate: '2026-08-21', category: 'インターン', time: '10:00〜18:00', location: '渋谷オフィス / オンライン', priority: 'high' },
+  { id: 'cd-2', title: 'サイバーエージェント 一次面接', targetDate: '2026-08-20', endDate: '2026-08-20', category: '面接', time: '14:00〜15:00', location: 'オンライン (Zoom)', priority: 'high' },
+  { id: 'cd-3', title: 'アクセンチュア WEBテスト受験', targetDate: '2026-08-25', endDate: '2026-08-25', category: 'WEBテスト', time: '18:00〜', location: '自宅 / マイページ', priority: 'medium' },
+  { id: 'cd-4', title: '野村総合研究所 ジョブ開催', targetDate: '2026-09-01', endDate: '2026-09-03', category: 'インターン', time: '10:00〜18:00', location: '東京本社 3F', priority: 'low' },
 ];
 
 export const INITIAL_WEEKLY_GOAL: WeeklyGoal = {

@@ -74,6 +74,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
         title: e.title,
         company: e.company,
         targetDate: e.date,
+        endDate: e.endDate || e.date,
         category: e.category,
         time: e.time,
         location: e.location,
