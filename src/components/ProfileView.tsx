@@ -43,7 +43,8 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   const [followLoading, setFollowLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
-  const isMe = userId === currentUser?.uid;
+  const isMe = !userId || userId === currentUser?.uid || userId === 'user-me';
+  const effectiveTargetUid = isMe ? (currentUser?.uid || userId || 'user-me') : userId;
 
   // プロフィール下部タブ (レポート / 投稿一覧)
   const [profileTab, setProfileTab] = useState<'report' | 'posts'>('report');
@@ -104,11 +105,20 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   }, [currentUser, userId, isMe]);
 
   useEffect(() => {
-    const unsubscribe = subscribeToUserPosts(userId, currentUser?.uid, following, (newPosts) => {
+    const unsubscribe = subscribeToUserPosts(effectiveTargetUid, currentUser?.uid, following, (newPosts) => {
       setPosts(newPosts);
     });
-    return () => unsubscribe();
-  }, [userId, currentUser, following]);
+
+    const handleAutoUpdate = () => {
+      onUpdate();
+    };
+    window.addEventListener('career_log_data_updated', handleAutoUpdate);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('career_log_data_updated', handleAutoUpdate);
+    };
+  }, [effectiveTargetUid, currentUser, following]);
 
   async function handleFollow() {
     if (!currentUser || followLoading) return;

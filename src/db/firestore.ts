@@ -720,11 +720,14 @@ export function subscribeToUserPosts(
 ) {
   const postsCollection = collection(db, 'posts');
 
+  const isSelf = !userId || userId === currentUserId || userId === 'user-me' || (!!currentUserId && userId === currentUserId);
+
   // A. 自分の投稿を取得する場合：
   // orderBy を使わない（serverTimestamp() 確定前のドキュメントが除外されるのを防ぐ）
   // ソートは JS 側で行い、記録直後に即座に即時集計されるようにする
-  if (userId === currentUserId) {
-    const q = query(postsCollection, where('userId', '==', userId));
+  if (isSelf) {
+    const targetUid = userId === 'user-me' ? (currentUserId || 'user-me') : userId;
+    const q = query(postsCollection, where('userId', '==', targetUid));
     return onSnapshot(q, (snapshot) => {
       const posts = snapshot.docs.map(doc => {
         const data = doc.data();
