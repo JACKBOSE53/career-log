@@ -157,14 +157,17 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
   // Edit Goal states
   const currentWeeklyTargetCategory = weeklyGoalData?.targetCategory ?? '全体';
   const currentWeeklyTargetMinutes = weeklyGoalData?.targetMinutes ?? 120;
+  const currentWeeklyTargetCount = weeklyGoalData?.targetCount ?? 0;
 
   const [goalCategory, setGoalCategory] = useState<string>(currentWeeklyTargetCategory);
   const [goalTargetMinutes, setGoalTargetMinutes] = useState<number>(currentWeeklyTargetMinutes);
+  const [goalTargetCount, setGoalTargetCount] = useState<number>(currentWeeklyTargetCount);
 
   useEffect(() => {
     if (weeklyGoalData) {
       setGoalCategory(weeklyGoalData.targetCategory);
       setGoalTargetMinutes(weeklyGoalData.targetMinutes ?? 120);
+      setGoalTargetCount(weeklyGoalData.targetCount ?? 0);
     }
   }, [weeklyGoalData]);
 
@@ -340,13 +343,20 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
   const totalCategoryMins = Object.values(categoryDurations).reduce((a, b) => a + b, 0);
 
-  // 定量実績のカウント
-  const esCount = myPosts.filter((p) => p.category === 'ES').length;
-  const obCount = myPosts.filter((p) => p.category === 'OB訪問').length;
-  const interviewCount = myPosts.filter((p) => p.category.includes('面接') || p.category.includes('面談')).length;
-  const offerCount = myPosts.filter((p) => p.title.includes('内定') || p.content.includes('内定')).length;
+  // 定量実績のカウント（対象タグ: ES / 面接 / OB訪問 / 内定）
+  const targetSummaryPosts = myPosts.filter((p) => {
+    if (summaryPeriod === 'month') {
+      return getPostDateStr(p).startsWith(thisMonthStr);
+    }
+    return true; // total
+  });
 
-  // 今週の目標達成率
+  const esCount = targetSummaryPosts.filter((p) => p.category === 'ES').length;
+  const obCount = targetSummaryPosts.filter((p) => p.category === 'OB訪問').length;
+  const interviewCount = targetSummaryPosts.filter((p) => p.category === '面接').length;
+  const offerCount = targetSummaryPosts.filter((p) => p.category === '内定' || p.title.includes('内定')).length;
+
+  // 今週の目標達成度 (時間 & 件数)
   const thisWeekPosts = myPosts.filter((p) => {
     const d = safeGetDate(p.createdAt);
     const sevenDaysAgo = new Date();
@@ -354,7 +364,10 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
     return d >= sevenDaysAgo && (currentWeeklyTargetCategory === '全体' || p.category === currentWeeklyTargetCategory);
   });
   const thisWeekMins = thisWeekPosts.reduce((acc, p) => acc + (p.studyMinutes || 0), 0);
-  const goalProgressPct = Math.min(100, Math.round((thisWeekMins / currentWeeklyTargetMinutes) * 100));
+  const thisWeekCount = thisWeekPosts.length;
+
+  const timeProgressPct = currentWeeklyTargetMinutes > 0 ? Math.min(100, Math.round((thisWeekMins / currentWeeklyTargetMinutes) * 100)) : 0;
+  const countProgressPct = currentWeeklyTargetCount > 0 ? Math.min(100, Math.round((thisWeekCount / currentWeeklyTargetCount) * 100)) : 0;
 
   async function handleAddCountdown() {
     if (!newCdTitle.trim() || !newCdDate || !currentUser) return;
@@ -380,7 +393,12 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
 
   async function handleSaveGoal() {
     if (!currentUser) return;
-    await setFirestoreWeeklyGoal(currentUser.uid, goalCategory, Number(goalTargetMinutes) || 60);
+    await setFirestoreWeeklyGoal(
+      currentUser.uid,
+      goalCategory,
+      Number(goalTargetMinutes) || 0,
+      Number(goalTargetCount) || 0
+    );
     setShowGoalModal(false);
     onUpdate();
     onToast?.('今週の目標を保存しました', 'success');
@@ -770,43 +788,53 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  {/* 円形プログレスリング */}
-                  <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
-                    <svg width="72" height="72" viewBox="0 0 72 72">
-                      <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
-                      <circle
-                        cx="36" cy="36" r="30"
-                        stroke={goalProgressPct >= 100 ? '#16A34A' : '#3B82F6'}
-                        strokeWidth="6"
-                        fill="transparent"
-                        strokeDasharray={2 * Math.PI * 30}
-                        strokeDashoffset={2 * Math.PI * 30 * (1 - goalProgressPct / 100)}
-                        strokeLinecap="round"
-                        transform="rotate(-90 36 36)"
-                        style={{ transition: 'stroke-dashoffset 0.5s ease' }}
-                      />
-                    </svg>
-                    <div style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', flexDirection: 'column',
-                      alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                        {goalProgressPct}%
-                      </span>
-                    </div>
-                  </div>
+                {/* 週次目標の進捗表示 (時間 & 件数) */}
+                {(() => {
+                  const mainPct = currentWeeklyTargetMinutes > 0 ? timeProgressPct : countProgressPct;
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                      {/* 円形プログレスリング */}
+                      <div style={{ position: 'relative', width: 72, height: 72, flexShrink: 0 }}>
+                        <svg width="72" height="72" viewBox="0 0 72 72">
+                          <circle cx="36" cy="36" r="30" stroke="var(--border-color)" strokeWidth="6" fill="transparent" />
+                          <circle
+                            cx="36" cy="36" r="30"
+                            stroke={mainPct >= 100 ? '#16A34A' : '#3B82F6'}
+                            strokeWidth="6"
+                            fill="transparent"
+                            strokeDasharray={2 * Math.PI * 30}
+                            strokeDashoffset={2 * Math.PI * 30 * (1 - mainPct / 100)}
+                            strokeLinecap="round"
+                            transform="rotate(-90 36 36)"
+                            style={{ transition: 'stroke-dashoffset 0.5s ease' }}
+                          />
+                        </svg>
+                        <div style={{
+                          position: 'absolute', inset: 0,
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center',
+                        }}>
+                          <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                            {mainPct}%
+                          </span>
+                        </div>
+                      </div>
 
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: 4 }}>
-                      {currentWeeklyTargetCategory} の取り組み目標
+                      <div style={{ flex: 1 }}>
+                        {currentWeeklyTargetMinutes > 0 && (
+                          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)', marginBottom: 2 }}>
+                            時間目標: {formatHoursMins(thisWeekMins)} / {formatHoursMins(currentWeeklyTargetMinutes)}
+                          </div>
+                        )}
+                        {currentWeeklyTargetCount > 0 && (
+                          <div style={{ fontWeight: 700, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                            件数目標: {thisWeekCount}件 / {currentWeeklyTargetCount}件
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      進捗: {formatHoursMins(thisWeekMins)} / {formatHoursMins(currentWeeklyTargetMinutes)}
-                    </div>
-                  </div>
-                </div>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -969,9 +997,29 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                   minuteStep={5}
                   onChange={(h, m) => {
                     const totalMins = h * 60 + m;
-                    setGoalTargetMinutes(totalMins > 0 ? totalMins : 60);
+                    setGoalTargetMinutes(totalMins >= 0 ? totalMins : 0);
                   }}
                 />
+              </div>
+
+              {/* 3. 目標件数入力 */}
+              <div>
+                <label style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 8 }}>
+                  3. 目標件数を設定 (任意、0で時間のみ目標)
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    type="number"
+                    className="input"
+                    min="0"
+                    max="100"
+                    value={goalTargetCount || ''}
+                    onChange={(e) => setGoalTargetCount(Number(e.target.value) || 0)}
+                    placeholder="例: 3"
+                    style={{ width: 120, padding: '10px 14px', fontSize: '0.95rem' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-secondary)' }}>社 / 回</span>
+                </div>
               </div>
 
               {/* 決定ボタン */}
