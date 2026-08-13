@@ -10,6 +10,7 @@ import {
   addCalendarEvent,
   deleteCalendarEvent,
   formatFirestoreDateLocal,
+  getPostDateStr,
   type FirestorePost,
   type FirestoreCalendarEvent,
 } from '../db/firestore';
@@ -153,7 +154,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   // 選択中の日付に該当するカウントダウンイベントと投稿記録
   const selectedEvents = countdowns.filter((cd) => cd.targetDate === selectedDateStr);
-  const selectedPosts = myPosts.filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(selectedDateStr));
+  const selectedPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(selectedDateStr));
 
   // カレンダーマスの生成
   const calendarCells = [];
@@ -165,7 +166,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   for (let d = 1; d <= daysInMonth; d++) {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayEvents = countdowns.filter((cd) => cd.targetDate === dStr);
-    const dayPosts = myPosts.filter((p) => formatFirestoreDateLocal(p.createdAt).startsWith(dStr));
+    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
     calendarCells.push({
       day: d,
       dateStr: dStr,

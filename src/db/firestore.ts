@@ -576,6 +576,7 @@ export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt
   });
 
   await addDoc(postsRef, cleanData);
+  notifyDataUpdated();
 }
 
 function getMillis(dateVal: any): number {
@@ -953,6 +954,7 @@ export async function addCalendarEvent(userId: string, event: Omit<FirestoreCale
 
 export async function deleteCalendarEvent(eventId: string) {
   await deleteDoc(doc(db, 'calendarEvents', eventId));
+  notifyDataUpdated();
 }
 
 export function subscribeToCalendarEvents(userId: string, callback: (events: FirestoreCalendarEvent[]) => void) {
@@ -996,6 +998,7 @@ export async function setWeeklyGoal(
   if (targetCount !== undefined) data.targetCount = targetCount;
 
   await setDoc(ref, data, { merge: true });
+  notifyDataUpdated();
 }
 
 export function subscribeToWeeklyGoal(userId: string, callback: (goal: FirestoreWeeklyGoal | null) => void) {
