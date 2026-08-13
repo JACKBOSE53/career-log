@@ -17,6 +17,7 @@ type FeedTab = 'friends' | 'everyone';
 
 export default function Timeline({ onUpdate, onProfileClick, onToast }: TimelineProps) {
   const [feedTab, setFeedTab] = useState<FeedTab>('everyone');
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'followers' | 'private'>('all');
   const [posts, setPosts] = useState<FirestorePost[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
@@ -72,19 +73,29 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
     return () => unsub();
   }, [myId]);
 
-  // ユーザー指示に基づく厳格なプライバシーフィルター
+  // ユーザー指示に基づく厳格なプライバシー＆公開範囲サブフィルター
   const filteredPosts = posts.filter((post) => {
-    if (post.visibility === 'private') return false; // 個人限定は非表示
-
+    let isTabAllowed = false;
     if (feedTab === 'everyone') {
-      // 「全員のタイムライン(みんなのひろば)」: 全体公開(public/未設定)のみ表示！
-      return post.visibility === 'public' || !post.visibility;
+      // みんなの広場: public のみ表示
+      isTabAllowed = post.visibility === 'public' || !post.visibility;
     } else {
-      // 「友達のタイムライン」: 自分の投稿またはフォロー中の友達で、public か followers のものを表示！
+      // 私のひろば: 自分 + フォロー中の人の投稿
       const isMyPost = post.userId === myId || post.userId === 'user-me';
       const isFriend = followingUids.includes(post.userId) || isFollowing(post.userId);
-      return (isMyPost || isFriend) && (post.visibility === 'public' || post.visibility === 'followers' || !post.visibility);
+      if (isMyPost) {
+        isTabAllowed = true;
+      } else if (isFriend) {
+        isTabAllowed = post.visibility === 'public' || post.visibility === 'followers' || !post.visibility;
+      }
     }
+
+    if (!isTabAllowed) return false;
+
+    if (visibilityFilter === 'public') return post.visibility === 'public' || !post.visibility;
+    if (visibilityFilter === 'followers') return post.visibility === 'followers';
+    if (visibilityFilter === 'private') return post.visibility === 'private';
+    return true;
   });
 
   function handlePostCreated() {
@@ -185,6 +196,31 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
             <Globe size={15} />
             みんなのひろば
           </button>
+        </div>
+
+        {/* 公開範囲サブフィルター (すべて / 全体公開 / 友達限定 / 個人) */}
+        <div style={{ display: 'flex', gap: 6, padding: '8px 12px', overflowX: 'auto', background: 'var(--bg-surface-2)', borderTop: '1px solid var(--border-color)' }}>
+          {[
+            { id: 'all', label: 'すべて' },
+            { id: 'public', label: '🌐 全体公開' },
+            { id: 'followers', label: '👥 友達' },
+            { id: 'private', label: '🔒 個人' },
+          ].map((f) => (
+            <button
+              key={f.id}
+              onClick={() => setVisibilityFilter(f.id as any)}
+              style={{
+                padding: '4px 12px', borderRadius: 99,
+                border: `1px solid ${visibilityFilter === f.id ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                background: visibilityFilter === f.id ? 'var(--color-primary)' : 'var(--bg-surface)',
+                color: visibilityFilter === f.id ? 'white' : 'var(--text-secondary)',
+                fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
+                whiteSpace: 'nowrap', transition: 'all 0.15s',
+              }}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
       </div>
 
