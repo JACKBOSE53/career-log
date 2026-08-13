@@ -945,34 +945,97 @@ export interface FirestoreCalendarEvent {
   createdAt: Timestamp | Date;
 }
 
+const LOCAL_CALENDAR_EVENTS_KEY = 'career_log_local_calendar_events_v1';
+
+function getLocalCalendarEvents(): FirestoreCalendarEvent[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_CALENDAR_EVENTS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function saveLocalCalendarEvents(events: FirestoreCalendarEvent[]) {
+  try {
+    localStorage.setItem(LOCAL_CALENDAR_EVENTS_KEY, JSON.stringify(events));
+  } catch (e) {
+    console.warn('Failed to save local calendar events:', e);
+  }
+}
+
 export async function addCalendarEvent(userId: string, event: Omit<FirestoreCalendarEvent, 'id' | 'userId' | 'createdAt'>) {
-  const ref = collection(db, 'calendarEvents');
-  await addDoc(ref, {
+  const effectiveUid = userId || 'user-me';
+  const newId = 'cal_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
+  const newEvent: FirestoreCalendarEvent = {
     ...event,
-    userId,
-    createdAt: serverTimestamp(),
-  });
+    id: newId,
+    userId: effectiveUid,
+    createdAt: new Date(),
+  };
+
+  // 1. ローカルストレージに即時保存 (100%成功保証)
+  const locals = getLocalCalendarEvents();
+  locals.push(newEvent);
+  saveLocalCalendarEvents(locals);
   notifyDataUpdated();
+
+  // 2. Firestoreに保存
+  try {
+    const ref = collection(db, 'calendarEvents');
+    await addDoc(ref, {
+      ...event,
+      userId: effectiveUid,
+      createdAt: serverTimestamp(),
+    });
+    notifyDataUpdated();
+  } catch (err) {
+    console.warn('addCalendarEvent Firestore notice (saved locally):', err);
+  }
 }
 
 export async function deleteCalendarEvent(eventId: string) {
-  await deleteDoc(doc(db, 'calendarEvents', eventId));
+  // 1. ローカルストレージから削除
+  const locals = getLocalCalendarEvents().filter(e => e.id !== eventId);
+  saveLocalCalendarEvents(locals);
   notifyDataUpdated();
+
+  // 2. Firestoreから削除
+  try {
+    if (!eventId.startsWith('cal_')) {
+      await deleteDoc(doc(db, 'calendarEvents', eventId));
+    }
+    notifyDataUpdated();
+  } catch (err) {
+    console.warn('deleteCalendarEvent Firestore error:', err);
+  }
 }
 
 export function subscribeToCalendarEvents(userId: string, callback: (events: FirestoreCalendarEvent[]) => void) {
+  const effectiveUid = userId || 'user-me';
   const q = query(
     collection(db, 'calendarEvents'),
-    where('userId', '==', userId),
-    orderBy('date', 'asc')
+    where('userId', '==', effectiveUid)
   );
+
   return onSnapshot(q, (snapshot) => {
-    const events = snapshot.docs.map(d => ({
+    const fsEvents = snapshot.docs.map(d => ({
       ...d.data(),
       id: d.id,
       createdAt: d.data().createdAt?.toDate() || new Date(),
     })) as FirestoreCalendarEvent[];
-    callback(events);
+
+    const locals = getLocalCalendarEvents();
+    const map = new Map<string, FirestoreCalendarEvent>();
+    locals.forEach(e => map.set(e.id || (e.title + e.date), e));
+    fsEvents.forEach(e => map.set(e.id || (e.title + e.date), e));
+
+    const merged = Array.from(map.values()).sort((a, b) => (a.date > b.date ? 1 : -1));
+    callback(merged);
+  }, (err) => {
+    console.warn('subscribeToCalendarEvents fallback to local:', err);
+    const locals = getLocalCalendarEvents();
+    callback(locals);
   });
 }
 

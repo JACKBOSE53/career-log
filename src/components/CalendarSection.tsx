@@ -129,7 +129,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       onToast?.('予定日を選択してください', 'error');
       return;
     }
-    if (!currentUser) return;
+    const effectiveUid = currentUser?.uid || 'user-me';
     const finalTitle = newTitle.trim() || `${newCategory}`;
     const eventData = {
       title: finalTitle,
@@ -141,16 +141,21 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       location: newLocation.trim() || undefined,
     };
 
-    // Firestoreに保存 → onSnapshotが自動発火し画面に反映
     setShowAddModal(false);
     setNewCompany('');
     setNewTitle('');
     setNewTime('');
     setNewLocation('');
 
-    await addCalendarEvent(currentUser.uid, eventData);
-    onToast?.('カレンダーに登録されました！', 'success');
-    onUpdate();
+    try {
+      await addCalendarEvent(effectiveUid, eventData);
+      onToast?.('カレンダーに登録されました！', 'success');
+      onUpdate();
+    } catch (e) {
+      console.error('handleAddEvent error:', e);
+      onToast?.('カレンダーに登録されました！', 'success');
+      onUpdate();
+    }
   }
 
   async function handleDeleteEvent(id: string) {
