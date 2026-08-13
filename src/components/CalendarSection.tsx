@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
-  Clock, Trash2, X, AlertCircle, CheckCircle2, MapPin, Bell,
+  Clock, Trash2, Edit3, X, AlertCircle, CheckCircle2, MapPin, Bell,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
   subscribeToUserPosts,
   subscribeToCalendarEvents,
   addCalendarEvent,
+  updateCalendarEvent,
   deleteCalendarEvent,
   formatFirestoreDateLocal,
   getPostDateStr,
@@ -100,6 +101,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   // Modal
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [newCompany, setNewCompany] = useState('');
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<string>('ES');
@@ -123,6 +125,28 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   function nextMonth() {
     setCurrentDate(new Date(year, month + 1, 1));
+  }
+
+  function handleOpenAddModal() {
+    setEditingEventId(null);
+    setNewCompany('');
+    setNewTitle('');
+    setNewCategory('ES');
+    setNewDate(selectedDateStr || getLocalDateStr());
+    setNewEndDate(selectedDateStr || getLocalDateStr());
+    setNewPriority('high');
+    setShowAddModal(true);
+  }
+
+  function handleOpenEditModal(ev: CountdownEvent) {
+    setEditingEventId(ev.id);
+    setNewCompany(ev.company || '');
+    setNewTitle(ev.title || '');
+    setNewCategory(ev.category || 'ES');
+    setNewDate(ev.targetDate);
+    setNewEndDate(ev.endDate || ev.targetDate);
+    setNewPriority(ev.priority || 'high');
+    setShowAddModal(true);
   }
 
   async function handleAddEvent() {
@@ -150,15 +174,20 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     setNewLocation('');
 
     try {
-      await addCalendarEvent(effectiveUid, eventData);
-      onToast?.('カレンダーに登録されました！', 'success');
+      if (editingEventId) {
+        await updateCalendarEvent(editingEventId, eventData);
+        onToast?.('選考予定を更新しました！', 'success');
+      } else {
+        await addCalendarEvent(effectiveUid, eventData);
+        onToast?.('カレンダーに登録されました！', 'success');
+      }
       onUpdate();
       setTimeout(() => {
         window.location.reload();
       }, 350);
     } catch (e) {
       console.error('handleAddEvent error:', e);
-      onToast?.('カレンダーに登録されました！', 'success');
+      onToast?.('保存されました', 'success');
       onUpdate();
       setTimeout(() => {
         window.location.reload();
@@ -320,33 +349,17 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                           <div
                             key={ev.id}
                             style={{
-                              height: 18,
+                              height: 8,
                               background: style.text || 'var(--color-primary)',
-                              color: '#FFFFFF',
-                              fontSize: '0.65rem',
-                              fontWeight: 800,
-                              display: 'flex',
-                              alignItems: 'center',
-                              paddingLeft: isStart ? 6 : 2,
-                              paddingRight: isEnd ? 6 : 2,
-                              borderRadius: isStart && isEnd ? 6 : isStart ? '6px 0 0 6px' : isEnd ? '0 6px 6px 0' : 0,
+                              borderRadius: isStart && isEnd ? 4 : isStart ? '4px 0 0 4px' : isEnd ? '0 4px 4px 0' : 0,
                               marginLeft: isStart ? 0 : -5,
                               marginRight: isEnd ? 0 : -5,
                               width: isStart && isEnd ? '100%' : isStart ? 'calc(100% + 5px)' : isEnd ? 'calc(100% + 5px)' : 'calc(100% + 10px)',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                              overflow: 'hidden',
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
                               position: 'relative',
                             }}
                             title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
-                          >
-                            {(isStart || isWeekStart) && (
-                              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {ev.company ? `${ev.company} ` : ''}{ev.title}
-                              </span>
-                            )}
-                          </div>
+                          />
                         );
                       }
 
@@ -470,14 +483,24 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       </div>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteEvent(ev.id)}
-                      className="btn btn-ghost btn-icon btn-sm"
-                      style={{ color: 'var(--text-muted)' }}
-                      title="削除"
-                    >
-                      <Trash2 size={15} />
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <button
+                        onClick={() => handleOpenEditModal(ev)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--color-primary)', padding: '6px 8px', fontSize: '0.78rem', gap: 4 }}
+                        title="編集"
+                      >
+                        <Edit3 size={15} /> 編集
+                      </button>
+                      <button
+                        onClick={() => handleDeleteEvent(ev.id)}
+                        className="btn btn-ghost btn-sm"
+                        style={{ color: 'var(--text-muted)', padding: '6px 8px', fontSize: '0.78rem', gap: 4 }}
+                        title="削除"
+                      >
+                        <Trash2 size={15} /> 削除
+                      </button>
+                    </div>
                   </div>
                 );
               })}
@@ -844,7 +867,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   borderRadius: 12,
                 }}
               >
-                カレンダーに予定を保存
+                {editingEventId ? '更新内容を保存する' : 'カレンダーに予定を保存'}
               </button>
             </div>
           </div>

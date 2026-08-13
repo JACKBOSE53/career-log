@@ -1023,6 +1023,28 @@ export async function deleteCalendarEvent(eventId: string) {
   }
 }
 
+export async function updateCalendarEvent(eventId: string, updatedData: Partial<FirestoreCalendarEvent>) {
+  // 1. ローカルストレージ内のデータを更新
+  const locals = getLocalCalendarEvents();
+  const index = locals.findIndex(e => e.id === eventId);
+  if (index !== -1) {
+    locals[index] = { ...locals[index], ...updatedData };
+    saveLocalCalendarEvents(locals);
+  }
+  notifyDataUpdated();
+
+  // 2. Firestore内のデータを更新
+  try {
+    if (!eventId.startsWith('cal_')) {
+      const ref = doc(db, 'calendarEvents', eventId);
+      await updateDoc(ref, updatedData);
+    }
+    notifyDataUpdated();
+  } catch (err) {
+    console.warn('updateCalendarEvent Firestore notice:', err);
+  }
+}
+
 export function subscribeToCalendarEvents(userId: string, callback: (events: FirestoreCalendarEvent[]) => void) {
   const effectiveUid = userId || 'user-me';
   const q = query(
