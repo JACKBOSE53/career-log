@@ -151,10 +151,16 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       await addCalendarEvent(effectiveUid, eventData);
       onToast?.('カレンダーに登録されました！', 'success');
       onUpdate();
+      setTimeout(() => {
+        window.location.reload();
+      }, 350);
     } catch (e) {
       console.error('handleAddEvent error:', e);
       onToast?.('カレンダーに登録されました！', 'success');
       onUpdate();
+      setTimeout(() => {
+        window.location.reload();
+      }, 350);
     }
   }
 
@@ -162,6 +168,9 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     await deleteCalendarEvent(id);
     onUpdate();
     onToast?.('予定を削除しました', 'success');
+    setTimeout(() => {
+      window.location.reload();
+    }, 350);
   }
 
   // 選択中の日付に該当するカウントダウンイベントと投稿記録
