@@ -113,10 +113,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-indexed
 
-  // 月の第一日の曜日と最終日
-  const firstDay = new Date(year, month, 1).getDay(); // 0(Sun) - 6(Sat)
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-
   const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
 
   function prevMonth() {
@@ -212,15 +208,75 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   });
   const selectedPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(selectedDateStr));
 
-  // カレンダーマスの生成
-  const calendarCells = [];
-  // 空白セル
-  for (let i = 0; i < firstDay; i++) {
-    calendarCells.push(null);
+  // ─── カレンダーマスの生成（前月・当月・翌月を含むフルグリッド） ───
+  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0(Sun) - 6(Sat)
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const daysInPrevMonth = new Date(year, month, 0).getDate();
+
+  interface CalendarGridCell {
+    day: number;
+    dateStr: string;
+    isCurrentMonth: boolean;
+    isToday: boolean;
+    isSelected: boolean;
+    dayOfWeek: number;
+    events: CountdownEvent[];
+    posts: FirestorePost[];
   }
-  // 日付セル
+
+  const calendarCells: CalendarGridCell[] = [];
+
+  // 前月の日付
+  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
+    const dayNum = daysInPrevMonth - i;
+    const prevDate = new Date(year, month - 1, dayNum);
+    const dStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+    const dayEvents = countdowns.filter((cd) => {
+      const start = cd.targetDate;
+      const end = cd.endDate || cd.targetDate;
+      return start <= dStr && dStr <= end;
+    });
+    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
+    calendarCells.push({
+      day: dayNum,
+      dateStr: dStr,
+      isCurrentMonth: false,
+      isToday: dStr === getLocalDateStr(),
+      isSelected: dStr === selectedDateStr,
+      dayOfWeek: prevDate.getDay(),
+      events: dayEvents,
+      posts: dayPosts,
+    });
+  }
+
+  // 当月の日付
   for (let d = 1; d <= daysInMonth; d++) {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dayEvents = countdowns.filter((cd) => {
+      const start = cd.targetDate;
+      const end = cd.endDate || cd.targetDate;
+      return start <= dStr && dStr <= end;
+    });
+    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
+    const dayOfWeek = (firstDayOfWeek + d - 1) % 7;
+    calendarCells.push({
+      day: d,
+      dateStr: dStr,
+      isCurrentMonth: true,
+      isToday: dStr === getLocalDateStr(),
+      isSelected: dStr === selectedDateStr,
+      dayOfWeek,
+      events: dayEvents,
+      posts: dayPosts,
+    });
+  }
+
+  // 翌月の日付（35マスまたは42マスでグリッドを完成）
+  const totalCellsNeeded = calendarCells.length > 35 ? 42 : 35;
+  const remaining = totalCellsNeeded - calendarCells.length;
+  for (let d = 1; d <= remaining; d++) {
+    const nextDate = new Date(year, month + 1, d);
+    const dStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const dayEvents = countdowns.filter((cd) => {
       const start = cd.targetDate;
       const end = cd.endDate || cd.targetDate;
@@ -230,22 +286,51 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     calendarCells.push({
       day: d,
       dateStr: dStr,
-      events: dayEvents,
-      posts: dayPosts,
+      isCurrentMonth: false,
       isToday: dStr === getLocalDateStr(),
       isSelected: dStr === selectedDateStr,
+      dayOfWeek: nextDate.getDay(),
+      events: dayEvents,
+      posts: dayPosts,
     });
   }
 
+  // イベントピル専用の鮮やかな背景色マップ（白文字との高コントラスト）
+  const PILL_COLORS: Record<string, string> = {
+    ES: '#2563EB',
+    テスト: '#059669',
+    '1次面接': '#DC2626',
+    '2次面接': '#B91C1C',
+    '最終面接': '#991B1B',
+    'AI・動画面接': '#0891B2',
+    '面談・リクルーター': '#059669',
+    GD: '#DB2777',
+    説明会: '#D97706',
+    OB訪問: '#0D9488',
+    インターン: '#D97706',
+    その他: '#475569',
+  };
+
+  function getPillColor(ev: CountdownEvent): string {
+    if (PILL_COLORS[ev.category]) return PILL_COLORS[ev.category];
+    // 会社名やタイトルに基づく自動カラーバリエーション
+    const str = ev.company || ev.title;
+    if (str.includes('証券') || str.includes('銀行') || str.includes('金融')) return '#2563EB'; // ブルー
+    if (str.includes('不動産') || str.includes('商社')) return '#0F766E'; // ディープティール
+    if (str.includes('バイト') || str.includes('塾')) return '#991B1B'; // ワインレッド
+    if (str.includes('SPI') || str.includes('Webテスト')) return '#059669'; // エメラルド
+    return '#D97706'; // デフォルトアンバーゴールド
+  }
+
   return (
-    <div style={{ animation: 'fadeIn 0.2s ease', paddingBottom: 40 }}>
+    <div style={{ animation: 'fadeIn 0.2s ease', paddingBottom: 60, position: 'relative' }}>
       {/* ── Header ── */}
       <div style={{
         position: 'sticky', top: 0,
         background: 'var(--bg-glass)',
         backdropFilter: 'blur(16px)',
         zIndex: 10,
-        borderBottom: '1px solid rgba(255, 255, 255, 0.12)',
+        borderBottom: '1px solid var(--border-color)',
         padding: '12px 16px',
         marginBottom: 16,
       }}>
@@ -260,7 +345,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 display: 'inline-flex', alignItems: 'center', gap: 4,
                 padding: '2px 8px', borderRadius: 99,
                 fontSize: '0.68rem', fontWeight: 700,
-                background: '#78350F44', color: '#FBBF24', border: '1px solid #92400E55',
+                background: 'rgba(245, 158, 11, 0.12)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)',
               }}>
                 <Bell size={10} /> 3日前・前日リマインドON
               </span>
@@ -278,12 +363,12 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
       <div style={{ padding: '0 16px' }}>
         {/* ── Month Controls ── */}
-        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+        <div className="card" style={{ padding: '16px 14px', marginBottom: 16, border: '1px solid var(--border-color)', borderRadius: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <button onClick={prevMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="前月">
               <ChevronLeft size={20} />
             </button>
-            <h2 style={{ fontSize: '1.1rem', fontWeight: 800 }}>
+            <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)' }}>
               {year}年 {month + 1}月
             </h2>
             <button onClick={nextMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="次月">
@@ -292,92 +377,222 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
           </div>
 
           {/* 曜日ヘッダー */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4, textAlign: 'center', marginBottom: 8 }}>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            textAlign: 'center',
+            marginBottom: 6,
+            borderBottom: '1px solid var(--border-color)',
+            paddingBottom: 6,
+          }}>
             {dayNames.map((name, i) => (
               <div key={name} style={{
-                fontSize: '0.75rem', fontWeight: 700,
-                color: i === 0 ? '#EF4444' : i === 6 ? '#2563EB' : 'var(--text-muted)',
+                fontSize: '0.78rem', fontWeight: 700,
+                color: i === 0 ? '#EF4444' : i === 6 ? '#3B82F6' : 'var(--text-muted)',
               }}>
                 {name}
               </div>
             ))}
           </div>
 
-          {/* カレンダーグリッド */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 4 }}>
-            {calendarCells.map((cell, idx) => {
-              if (!cell) {
-                return <div key={`empty-${idx}`} style={{ height: 52 }} />;
-              }
-              const hasItems = cell.events.length > 0 || cell.posts.length > 0;
+          {/* カレンダーグリッド（フルグリッド） */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(7, 1fr)',
+            gap: '1px',
+            background: 'var(--border-color)',
+            borderRadius: 10,
+            overflow: 'hidden',
+            border: '1px solid var(--border-color)',
+          }}>
+            {calendarCells.map((cell) => {
+              const isSunday = cell.dayOfWeek === 0;
+              const isSaturday = cell.dayOfWeek === 6;
 
               return (
                 <div
                   key={cell.dateStr}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
                   style={{
-                    minHeight: 62, padding: '4px 2px', borderRadius: 10,
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-start',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                    background: cell.isSelected ? 'var(--color-primary-glow)' : cell.isToday ? '#1E293B' : 'transparent',
-                    border: `1.5px solid ${cell.isSelected ? 'var(--color-primary)' : cell.isToday ? 'var(--color-primary)' : 'transparent'}`,
+                    minHeight: 88,
+                    padding: '4px 2px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    justifyContent: 'flex-start',
+                    cursor: 'pointer',
+                    transition: 'background 0.15s ease',
+                    background: cell.isSelected
+                      ? 'var(--color-primary-glow)'
+                      : cell.isToday
+                      ? 'rgba(255, 255, 255, 0.07)'
+                      : 'var(--bg-surface)',
                     position: 'relative',
+                    outline: cell.isSelected ? '2px solid var(--color-primary)' : 'none',
+                    outlineOffset: '-2px',
+                    zIndex: cell.isSelected ? 5 : 1,
                   }}
                 >
-                  <span style={{
-                    fontSize: '0.8rem', fontWeight: cell.isSelected || cell.isToday ? 800 : 500,
-                    color: cell.isSelected || cell.isToday ? 'var(--color-primary)' : 'var(--text-primary)',
-                    marginBottom: 2,
-                  }}>
-                    {cell.day}
-                  </span>
+                  {/* 日付数字 */}
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
+                    {cell.isToday ? (
+                      <span style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: '50%',
+                        background: '#FFFFFF',
+                        color: '#0F172A',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.75rem',
+                        fontWeight: 800,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                      }}>
+                        {cell.day}
+                      </span>
+                    ) : (
+                      <span style={{
+                        fontSize: '0.78rem',
+                        fontWeight: cell.isSelected ? 800 : 600,
+                        color: !cell.isCurrentMonth
+                          ? '#64748B'
+                          : isSunday
+                          ? '#EF4444'
+                          : isSaturday
+                          ? '#3B82F6'
+                          : 'var(--text-primary)',
+                        opacity: !cell.isCurrentMonth ? 0.6 : 1,
+                      }}>
+                        {cell.day}
+                      </span>
+                    )}
+                  </div>
 
-                  {/* ── 複数日カラーリボン帯 ＆ 単日イベントバー ── */}
-                  <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 3, overflow: 'visible', zIndex: 2 }}>
-                    {cell.events.slice(0, 2).map((ev) => {
-                      const style = getCategoryStyle(ev.category);
+                  {/* ── イベントバー（連日帯 ＆ 単日ピル） ── */}
+                  <div style={{
+                    width: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 3,
+                    overflow: 'visible',
+                    zIndex: 2,
+                  }}>
+                    {cell.events.slice(0, 3).map((ev) => {
+                      const pillBg = getPillColor(ev);
+                      const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
                       const isStart = cell.dateStr === ev.targetDate;
                       const isEnd = cell.dateStr === (ev.endDate || ev.targetDate);
-                      const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
+                      const isWeekStart = cell.dayOfWeek === 0;
+                      const isWeekEnd = cell.dayOfWeek === 6;
 
-                      // 曜日の判定 (週の頭 = 日曜日 = first day of row)
-                      const dateObj = new Date(cell.dateStr);
-                      const isWeekStart = dateObj.getDay() === 0;
+                      // タイトルの短縮表示（会社名またはタイトル）
+                      const displayTitle = ev.company || ev.title;
 
                       if (isMulti) {
+                        // 連日イベント（帯で繋げる）
+                        const shouldShowText = isStart || isWeekStart || cell.day === 1;
+
                         return (
                           <div
                             key={ev.id}
                             style={{
-                              height: 8,
-                              background: style.text || 'var(--color-primary)',
-                              borderRadius: isStart && isEnd ? 4 : isStart ? '4px 0 0 4px' : isEnd ? '0 4px 4px 0' : 0,
-                              marginLeft: isStart ? 0 : -5,
-                              marginRight: isEnd ? 0 : -5,
-                              width: isStart && isEnd ? '100%' : isStart ? 'calc(100% + 5px)' : isEnd ? 'calc(100% + 5px)' : 'calc(100% + 10px)',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                              height: 18,
+                              background: pillBg,
+                              color: '#FFFFFF',
+                              borderRadius: isStart && isEnd
+                                ? 4
+                                : isStart || isWeekStart
+                                ? '4px 0 0 4px'
+                                : isEnd || isWeekEnd
+                                ? '0 4px 4px 0'
+                                : 0,
+                              marginLeft: isStart || isWeekStart ? 0 : -3,
+                              marginRight: isEnd || isWeekEnd ? 0 : -3,
+                              width: isStart && isEnd
+                                ? '100%'
+                                : isStart || isWeekStart
+                                ? 'calc(100% + 3px)'
+                                : isEnd || isWeekEnd
+                                ? 'calc(100% + 3px)'
+                                : 'calc(100% + 6px)',
+                              boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
                               position: 'relative',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: '0.68rem',
+                              fontWeight: 700,
+                              padding: '0 2px',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              textOverflow: 'ellipsis',
+                              lineHeight: '18px',
                             }}
                             title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
-                          />
+                          >
+                            <span style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              display: shouldShowText ? 'inline-block' : 'none',
+                              width: '100%',
+                              textAlign: 'center',
+                            }}>
+                              {displayTitle}
+                            </span>
+                          </div>
                         );
                       }
 
-                      // 単日イベントの場合
+                      // 単日イベント（角丸ピルバー）
                       return (
                         <div
                           key={ev.id}
                           style={{
-                            height: 4,
+                            height: 18,
                             width: '100%',
-                            background: style.text || 'var(--color-primary)',
+                            background: pillBg,
+                            color: '#FFFFFF',
                             borderRadius: 4,
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            padding: '0 2px',
+                            overflow: 'hidden',
+                            whiteSpace: 'nowrap',
+                            textOverflow: 'ellipsis',
+                            lineHeight: '18px',
                           }}
                           title={`${ev.title} (${ev.category})`}
-                        />
+                        >
+                          <span style={{
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            width: '100%',
+                            textAlign: 'center',
+                          }}>
+                            {displayTitle}
+                          </span>
+                        </div>
                       );
                     })}
+
+                    {cell.events.length > 3 && (
+                      <div style={{
+                        fontSize: '0.6rem',
+                        fontWeight: 700,
+                        color: 'var(--text-muted)',
+                        textAlign: 'center',
+                        lineHeight: 1,
+                      }}>
+                        +{cell.events.length - 3}
+                      </div>
+                    )}
                   </div>
                 </div>
               );
@@ -873,6 +1088,34 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
           </div>
         </div>
       )}
+
+      {/* ── Floating Action Button (FAB: ＋ボタン) ── */}
+      <button
+        onClick={() => { setNewDate(selectedDateStr); setShowAddModal(true); }}
+        aria-label="予定を追加"
+        style={{
+          position: 'fixed',
+          bottom: 84,
+          right: 20,
+          width: 54,
+          height: 54,
+          borderRadius: '50%',
+          background: 'linear-gradient(135deg, #334155, #1E293B)',
+          color: '#FFFFFF',
+          border: '1.5px solid rgba(255, 255, 255, 0.18)',
+          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          cursor: 'pointer',
+          zIndex: 80,
+          transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
+        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+      >
+        <Plus size={26} strokeWidth={2.5} />
+      </button>
     </div>
   );
 }
