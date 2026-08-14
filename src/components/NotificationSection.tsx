@@ -419,15 +419,6 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                         予定日: {rem.date} {isToday ? '🔥 本日当日です！' : `(あと${rem.daysLeft}日)`}
                       </div>
                     </div>
-
-                    <button
-                      onClick={() => handleDismissReminder(rem.id)}
-                      className="btn btn-ghost btn-icon btn-sm"
-                      style={{ color: 'var(--text-muted)', padding: 6 }}
-                      title="通知を閉じる（※カレンダーの予定は残ります）"
-                    >
-                      <X size={16} />
-                    </button>
                   </div>
                 );
               })}
@@ -500,14 +491,34 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                     </div>
                   </div>
 
-                  <button
-                    onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notif.id!); }}
-                    className="btn btn-ghost btn-icon btn-sm"
-                    style={{ color: 'var(--text-muted)', padding: 6 }}
-                    title="通知を削除"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                    {/* 直接押せる既読ボタン */}
+                    {!notif.read && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (currentUser && notif.id) {
+                            setFirestoreNotifs((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
+                            markNotificationReadFirestore(currentUser.uid, notif.id);
+                          }
+                        }}
+                        className="btn btn-primary btn-sm"
+                        style={{ padding: '4px 10px', fontSize: '0.75rem', borderRadius: 6, gap: 4 }}
+                        title="既読にする"
+                      >
+                        <Check size={13} strokeWidth={2.5} /> 既読
+                      </button>
+                    )}
+
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleDeleteNotification(notif.id!); }}
+                      className="btn btn-ghost btn-icon btn-sm"
+                      style={{ color: 'var(--text-muted)', padding: 6 }}
+                      title="通知履歴から削除"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>

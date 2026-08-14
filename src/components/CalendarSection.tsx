@@ -804,123 +804,50 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       </div>
                     </div>
 
-                    {/* ── 3点リーダー (︙) メニューボタン ── */}
-                    <div className="event-menu-container" style={{ position: 'relative', flexShrink: 0 }}>
+                    {/* ── アクションボタン群（完了・編集・削除） ── */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                      {/* 完了ボタン（直接タップ可能） */}
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenMenuEventId(openMenuEventId === ev.id ? null : ev.id);
-                        }}
-                        className="btn btn-ghost btn-icon btn-sm"
+                        onClick={() => handleToggleComplete(ev)}
+                        className="btn btn-sm"
                         style={{
-                          color: 'var(--text-secondary)',
-                          padding: '6px 8px',
+                          background: ev.completed ? '#10B981' : 'rgba(16, 185, 129, 0.12)',
+                          color: ev.completed ? '#FFFFFF' : '#10B981',
+                          border: `1px solid ${ev.completed ? '#10B981' : 'rgba(16, 185, 129, 0.35)'}`,
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          padding: '5px 10px',
                           borderRadius: 8,
+                          gap: 4,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          transition: 'all 0.15s ease',
                         }}
-                        title="メニュー"
-                        aria-label="メニュー"
+                        title={ev.completed ? '未完了に戻す' : '完了マークをつける'}
                       >
-                        <MoreVertical size={18} />
+                        <Check size={14} strokeWidth={2.5} />
+                        {ev.completed ? '完了' : '完了にする'}
                       </button>
 
-                      {openMenuEventId === ev.id && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            right: 0,
-                            top: 'calc(100% + 4px)',
-                            background: 'var(--bg-surface)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: 12,
-                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
-                            zIndex: 100,
-                            minWidth: 160,
-                            padding: '6px',
-                            animation: 'fadeIn 0.15s ease',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          {/* 完了マークをつける / 解除 */}
-                          <button
-                            onClick={() => handleToggleComplete(ev)}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              width: '100%',
-                              padding: '8px 10px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: 'transparent',
-                              color: ev.completed ? 'var(--text-secondary)' : '#10B981',
-                              fontSize: '0.8125rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              transition: 'background 0.12s ease',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                          >
-                            <CheckCircle2 size={15} color={ev.completed ? 'var(--text-muted)' : '#10B981'} />
-                            {ev.completed ? '未完了に戻す' : '完了マークをつける'}
-                          </button>
+                      {/* 編集ボタン */}
+                      <button
+                        onClick={() => handleOpenEditModal(ev)}
+                        className="btn btn-ghost btn-icon btn-sm"
+                        style={{ color: 'var(--color-primary)', padding: '6px 8px' }}
+                        title="予定を編集"
+                      >
+                        <Edit3 size={16} />
+                      </button>
 
-                          {/* 予定を編集 */}
-                          <button
-                            onClick={() => { setOpenMenuEventId(null); handleOpenEditModal(ev); }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              width: '100%',
-                              padding: '8px 10px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: 'transparent',
-                              color: 'var(--text-primary)',
-                              fontSize: '0.8125rem',
-                              fontWeight: 600,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              transition: 'background 0.12s ease',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                          >
-                            <Edit3 size={15} color="var(--color-primary)" />
-                            予定を編集
-                          </button>
-
-                          <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />
-
-                          {/* 予定を消す */}
-                          <button
-                            onClick={() => { setOpenMenuEventId(null); handleDeleteEvent(ev.id); }}
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 8,
-                              width: '100%',
-                              padding: '8px 10px',
-                              borderRadius: 8,
-                              border: 'none',
-                              background: 'transparent',
-                              color: '#EF4444',
-                              fontSize: '0.8125rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              textAlign: 'left',
-                              transition: 'background 0.12s ease',
-                            }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                          >
-                            <Trash2 size={15} color="#EF4444" />
-                            予定を消す
-                          </button>
-                        </div>
-                      )}
+                      {/* 予定を消す（カレンダーからのみ可能） */}
+                      <button
+                        onClick={() => handleDeleteEvent(ev.id)}
+                        className="btn btn-ghost btn-icon btn-sm"
+                        style={{ color: 'var(--text-muted)', padding: '6px 8px' }}
+                        title="カレンダーから予定を削除"
+                      >
+                        <Trash2 size={16} />
+                      </button>
                     </div>
                   </div>
                 );
