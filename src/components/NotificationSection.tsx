@@ -398,27 +398,52 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                     className="card"
                     style={{
                       padding: '12px 14px',
-                      display: 'flex', alignItems: 'center', gap: 12,
-                      background: isToday ? 'rgba(239, 68, 68, 0.1)' : isTomorrow ? 'rgba(245, 158, 11, 0.1)' : 'var(--bg-surface-2)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+                      background: isToday ? 'rgba(239, 68, 68, 0.08)' : isTomorrow ? 'rgba(245, 158, 11, 0.08)' : 'var(--bg-surface-2)',
                       borderLeft: `4px solid ${isToday ? '#EF4444' : isTomorrow ? '#F59E0B' : '#3B82F6'}`,
                     }}
                   >
-                    <div style={{
-                      padding: '4px 8px', borderRadius: 6,
-                      background: isToday ? '#EF4444' : isTomorrow ? '#F59E0B' : '#3B82F6',
-                      color: 'white', fontWeight: 800, fontSize: '0.72rem', flexShrink: 0,
-                    }}>
-                      {isToday ? '本日選考' : isTomorrow ? '前日' : '3日前'}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        padding: '4px 8px', borderRadius: 6,
+                        background: isToday ? '#EF4444' : isTomorrow ? '#F59E0B' : '#3B82F6',
+                        color: 'white', fontWeight: 800, fontSize: '0.72rem', flexShrink: 0,
+                      }}>
+                        {isToday ? '本日選考' : isTomorrow ? '前日' : '3日前'}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
+                          {rem.title} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({rem.category})</span>
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
+                          予定日: {rem.date} {isToday ? '🔥 本日当日です！' : `(あと${rem.daysLeft}日)`}
+                        </div>
+                      </div>
                     </div>
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 800, fontSize: '0.875rem', color: 'var(--text-primary)' }}>
-                        {rem.title} <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>({rem.category})</span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 2 }}>
-                        予定日: {rem.date} {isToday ? '🔥 本日当日です！' : `(あと${rem.daysLeft}日)`}
-                      </div>
-                    </div>
+                    {/* 既読ボタン（通知を既読非表示にする・カレンダーの予定は残る） */}
+                    <button
+                      onClick={() => handleDismissReminder(rem.id)}
+                      className="btn btn-sm"
+                      style={{
+                        padding: '5px 12px',
+                        fontSize: '0.78rem',
+                        borderRadius: 6,
+                        gap: 4,
+                        flexShrink: 0,
+                        background: 'rgba(37, 99, 235, 0.12)',
+                        color: 'var(--color-primary)',
+                        border: '1px solid rgba(37, 99, 235, 0.35)',
+                        fontWeight: 700,
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="アラーム通知を既読にする（※カレンダーの予定は残ります）"
+                    >
+                      <Check size={13} strokeWidth={2.5} /> 既読
+                    </button>
                   </div>
                 );
               })}
