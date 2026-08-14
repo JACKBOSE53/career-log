@@ -295,7 +295,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     });
   }
 
-  // ─── イベントピル専用の透明感あふれるグラスモーフィズム配色マップ ───
+  // ─── イベントピル専用の透明感あふれるクリーンなパレット（黒ずみゼロ・高コントラスト） ───
   interface PillStyle {
     bg: string;
     border: string;
@@ -304,64 +304,64 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
 
   const TRANSLUCENT_PILL_STYLES: Record<string, PillStyle> = {
     ES: {
-      bg: 'rgba(59, 130, 246, 0.18)',
-      border: 'rgba(96, 165, 250, 0.42)',
-      text: '#93C5FD',
+      bg: 'rgba(37, 99, 235, 0.12)',
+      border: 'rgba(37, 99, 235, 0.3)',
+      text: '#1D4ED8',
     },
     テスト: {
-      bg: 'rgba(16, 185, 129, 0.18)',
-      border: 'rgba(52, 211, 153, 0.42)',
-      text: '#6EE7B7',
+      bg: 'rgba(5, 150, 105, 0.12)',
+      border: 'rgba(5, 150, 105, 0.3)',
+      text: '#047857',
     },
     '1次面接': {
-      bg: 'rgba(239, 68, 68, 0.18)',
-      border: 'rgba(248, 113, 113, 0.42)',
-      text: '#FCA5A5',
+      bg: 'rgba(220, 38, 38, 0.12)',
+      border: 'rgba(220, 38, 38, 0.3)',
+      text: '#B91C1C',
     },
     '2次面接': {
-      bg: 'rgba(225, 29, 72, 0.18)',
-      border: 'rgba(244, 63, 94, 0.42)',
-      text: '#FDA4AF',
+      bg: 'rgba(190, 18, 60, 0.12)',
+      border: 'rgba(190, 18, 60, 0.3)',
+      text: '#9F1239',
     },
     '最終面接': {
-      bg: 'rgba(220, 38, 38, 0.24)',
-      border: 'rgba(239, 68, 68, 0.48)',
-      text: '#FECACA',
+      bg: 'rgba(185, 28, 28, 0.14)',
+      border: 'rgba(185, 28, 28, 0.35)',
+      text: '#991B1B',
     },
     'AI・動画面接': {
-      bg: 'rgba(6, 182, 212, 0.18)',
-      border: 'rgba(34, 211, 238, 0.42)',
-      text: '#67E8F9',
+      bg: 'rgba(8, 145, 178, 0.12)',
+      border: 'rgba(8, 145, 178, 0.3)',
+      text: '#0E7490',
     },
     '面談・リクルーター': {
-      bg: 'rgba(16, 185, 129, 0.18)',
-      border: 'rgba(52, 211, 153, 0.42)',
-      text: '#6EE7B7',
+      bg: 'rgba(5, 150, 105, 0.12)',
+      border: 'rgba(5, 150, 105, 0.3)',
+      text: '#047857',
     },
     GD: {
-      bg: 'rgba(236, 72, 153, 0.18)',
-      border: 'rgba(244, 114, 182, 0.42)',
-      text: '#F9A8D4',
+      bg: 'rgba(219, 39, 119, 0.12)',
+      border: 'rgba(219, 39, 119, 0.3)',
+      text: '#BE185D',
     },
     説明会: {
-      bg: 'rgba(245, 158, 11, 0.18)',
-      border: 'rgba(251, 191, 36, 0.42)',
-      text: '#FDE68A',
+      bg: 'rgba(217, 119, 6, 0.12)',
+      border: 'rgba(217, 119, 6, 0.3)',
+      text: '#B45309',
     },
     OB訪問: {
-      bg: 'rgba(20, 184, 166, 0.18)',
-      border: 'rgba(45, 212, 191, 0.42)',
-      text: '#5EEAD4',
+      bg: 'rgba(13, 148, 136, 0.12)',
+      border: 'rgba(13, 148, 136, 0.3)',
+      text: '#0F766E',
     },
     インターン: {
-      bg: 'rgba(245, 158, 11, 0.22)',
-      border: 'rgba(251, 191, 36, 0.48)',
-      text: '#FDE68A',
+      bg: 'rgba(217, 119, 6, 0.14)',
+      border: 'rgba(217, 119, 6, 0.35)',
+      text: '#B45309',
     },
     その他: {
-      bg: 'rgba(148, 163, 184, 0.15)',
-      border: 'rgba(148, 163, 184, 0.35)',
-      text: '#CBD5E1',
+      bg: 'rgba(100, 116, 139, 0.12)',
+      border: 'rgba(100, 116, 139, 0.28)',
+      text: '#475569',
     },
   };
 
@@ -369,18 +369,18 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     if (TRANSLUCENT_PILL_STYLES[ev.category]) return TRANSLUCENT_PILL_STYLES[ev.category];
     const str = ev.company || ev.title;
     if (str.includes('証券') || str.includes('銀行') || str.includes('金融')) {
-      return { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(96, 165, 250, 0.45)', text: '#93C5FD' };
+      return { bg: 'rgba(37, 99, 235, 0.12)', border: 'rgba(37, 99, 235, 0.3)', text: '#1D4ED8' };
     }
     if (str.includes('不動産') || str.includes('商社')) {
-      return { bg: 'rgba(20, 184, 166, 0.2)', border: 'rgba(45, 212, 191, 0.45)', text: '#5EEAD4' };
+      return { bg: 'rgba(13, 148, 136, 0.12)', border: 'rgba(13, 148, 136, 0.3)', text: '#0F766E' };
     }
     if (str.includes('バイト') || str.includes('塾')) {
-      return { bg: 'rgba(225, 29, 72, 0.2)', border: 'rgba(244, 63, 94, 0.45)', text: '#FDA4AF' };
+      return { bg: 'rgba(220, 38, 38, 0.12)', border: 'rgba(220, 38, 38, 0.3)', text: '#B91C1C' };
     }
     if (str.includes('SPI') || str.includes('Webテスト')) {
-      return { bg: 'rgba(16, 185, 129, 0.2)', border: 'rgba(52, 211, 153, 0.45)', text: '#6EE7B7' };
+      return { bg: 'rgba(5, 150, 105, 0.12)', border: 'rgba(5, 150, 105, 0.3)', text: '#047857' };
     }
-    return { bg: 'rgba(245, 158, 11, 0.2)', border: 'rgba(251, 191, 36, 0.45)', text: '#FDE68A' };
+    return { bg: 'rgba(217, 119, 6, 0.12)', border: 'rgba(217, 119, 6, 0.3)', text: '#B45309' };
   }
 
   return (
@@ -476,18 +476,14 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   onClick={() => setSelectedDateStr(cell.dateStr)}
                   style={{
                     minHeight: 88,
-                    padding: '4px 2px',
+                    padding: '5px 2px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'flex-start',
                     cursor: 'pointer',
                     transition: 'background 0.15s ease',
-                    background: cell.isSelected
-                      ? 'var(--color-primary-glow)'
-                      : cell.isToday
-                      ? 'rgba(255, 255, 255, 0.07)'
-                      : 'var(--bg-surface)',
+                    background: 'var(--bg-surface)',
                     position: 'relative',
                     outline: cell.isSelected ? '2px solid var(--color-primary)' : 'none',
                     outlineOffset: '-2px',
@@ -495,20 +491,19 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   }}
                 >
                   {/* 日付数字 */}
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 3 }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
                     {cell.isToday ? (
                       <span style={{
-                        width: 20,
-                        height: 20,
+                        width: 22,
+                        height: 22,
                         borderRadius: '50%',
-                        background: '#FFFFFF',
-                        color: '#0F172A',
+                        background: '#2563EB',
+                        color: '#FFFFFF',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
                         fontSize: '0.75rem',
                         fontWeight: 800,
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
                       }}>
                         {cell.day}
                       </span>
@@ -517,11 +512,11 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         fontSize: '0.78rem',
                         fontWeight: cell.isSelected ? 800 : 600,
                         color: !cell.isCurrentMonth
-                          ? '#64748B'
+                          ? '#94A3B8'
                           : isSunday
                           ? '#EF4444'
                           : isSaturday
-                          ? '#3B82F6'
+                          ? '#2563EB'
                           : 'var(--text-primary)',
                         opacity: !cell.isCurrentMonth ? 0.6 : 1,
                       }}>
@@ -551,7 +546,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       const displayTitle = ev.company || ev.title;
 
                       if (isMulti) {
-                        // 連日イベント（透明感ある帯で繋げる）
+                        // 連日イベント（透明感ある帯で繋げる・黒ずみ影なし）
                         const shouldShowText = isStart || isWeekStart || cell.day === 1;
 
                         return (
@@ -581,8 +576,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                                 : isEnd || isWeekEnd
                                 ? 'calc(100% + 3px)'
                                 : 'calc(100% + 6px)',
-                              backdropFilter: 'blur(4px)',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
                               position: 'relative',
                               display: 'flex',
                               alignItems: 'center',
@@ -611,7 +604,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         );
                       }
 
-                      // 単日イベント（透明感ある角丸ピルバー）
+                      // 単日イベント（透明感ある角丸ピルバー・黒ずみ影なし）
                       return (
                         <div
                           key={ev.id}
@@ -622,8 +615,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                             color: style.text,
                             border: `1px solid ${style.border}`,
                             borderRadius: 4,
-                            backdropFilter: 'blur(4px)',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
