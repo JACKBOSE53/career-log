@@ -24,11 +24,11 @@ import VerticalNumberPicker from './VerticalNumberPicker';
 
 import { getLocalDateStr, getMondayOfCurrentWeek } from '../utils/dateUtils';
 
-function safeGetDate(dateVal: any): Date {
+function safeGetDate(dateVal: import('firebase/firestore').Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined): Date {
   if (!dateVal) return new Date();
   if (dateVal instanceof Date) return dateVal;
-  if (typeof dateVal.toDate === 'function') return dateVal.toDate();
-  const parsed = new Date(dateVal);
+  if (typeof dateVal === 'object' && 'toDate' in dateVal && typeof dateVal.toDate === 'function') return dateVal.toDate();
+  const parsed = new Date(dateVal as string | number);
   return isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 

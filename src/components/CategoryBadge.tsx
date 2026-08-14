@@ -2,44 +2,44 @@ import type { Category } from '../db/mockData';
 
 export const CATEGORY_COLOR_MAP: Record<string, { bg: string; text: string; gradient: string; lightBg: string; border: string }> = {
   ES: {
-    bg: '#F4F6FF', text: '#4F46E5',
-    gradient: 'linear-gradient(135deg, #F4F6FF 0%, #E0E7FF 100%)',
-    lightBg: '#FAFCFF', border: '#E0E7FF',
+    bg: '#EFF6FF', text: '#1D4ED8',
+    gradient: 'linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%)',
+    lightBg: '#F8FAFF', border: '#BFDBFE',
   },
   テスト: {
-    bg: '#FAF5FF', text: '#9333EA',
+    bg: '#FAF5FF', text: '#7E22CE',
     gradient: 'linear-gradient(135deg, #FAF5FF 0%, #F3E8FF 100%)',
-    lightBg: '#FAFAF9', border: '#F3E8FF',
+    lightBg: '#FCF9FF', border: '#E9D5FF',
   },
   面接: {
-    bg: '#FFF5F5', text: '#E11D48',
-    gradient: 'linear-gradient(135deg, #FFF5F5 0%, #FFE4E6 100%)',
-    lightBg: '#FFFAFA', border: '#FFE4E6',
+    bg: '#FEF2F2', text: '#B91C1C',
+    gradient: 'linear-gradient(135deg, #FEF2F2 0%, #FEE2E2 100%)',
+    lightBg: '#FFFAFA', border: '#FECACA',
   },
   GD: {
-    bg: '#FFF5F9', text: '#DB2777',
-    gradient: 'linear-gradient(135deg, #FFF5F9 0%, #FCE7F3 100%)',
-    lightBg: '#FAFBFD', border: '#FCE7F3',
+    bg: '#FDF2F8', text: '#BE185D',
+    gradient: 'linear-gradient(135deg, #FDF2F8 0%, #FCE7F3 100%)',
+    lightBg: '#FFF9FB', border: '#FBCFE8',
   },
   説明会: {
-    bg: '#FFFDF0', text: '#D97706',
-    gradient: 'linear-gradient(135deg, #FFFDF0 0%, #FEF3C7 100%)',
-    lightBg: '#FFFDF5', border: '#FEF3C7',
+    bg: '#FFFBEB', text: '#B45309',
+    gradient: 'linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%)',
+    lightBg: '#FFFDF5', border: '#FDE68A',
   },
   OB訪問: {
-    bg: '#F2FDF7', text: '#059669',
-    gradient: 'linear-gradient(135deg, #F2FDF7 0%, #D1FAE5 100%)',
-    lightBg: '#F7FCF9', border: '#D1FAE5',
+    bg: '#ECFDF5', text: '#047857',
+    gradient: 'linear-gradient(135deg, #ECFDF5 0%, #D1FAE5 100%)',
+    lightBg: '#F7FCF9', border: '#A7F3D0',
   },
   インターン: {
-    bg: '#FFF9F5', text: '#EA580C',
-    gradient: 'linear-gradient(135deg, #FFF9F5 0%, #FFEDD5 100%)',
-    lightBg: '#FFFDFB', border: '#FFEDD5',
+    bg: '#FFF7ED', text: '#C2410C',
+    gradient: 'linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)',
+    lightBg: '#FFFCF9', border: '#FED7AA',
   },
   その他: {
-    bg: '#F8FAFC', text: '#64748B',
+    bg: '#F8FAFC', text: '#475569',
     gradient: 'linear-gradient(135deg, #F8FAFC 0%, #E2E8F0 100%)',
-    lightBg: '#F8FAFC', border: '#E2E8F0',
+    lightBg: '#FAFCFD', border: '#CBD5E1',
   },
 };
 

@@ -95,10 +95,8 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
       : (studyMinutes ? Number(studyMinutes) : undefined);
 
     const todayStr = getLocalDateStr();
-    const postPayload: Record<string, any> = {
+    const postPayload: Parameters<typeof createPost>[0] = {
       userId,
-      userName: currentUser.displayName || 'ユーザー',
-      userAvatar: currentUser.photoURL || '',
       category,
       title: autoTitle,
       content: finalContent,
@@ -115,15 +113,16 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
     }
 
     try {
-      await createPost(postPayload as any);
+      await createPost(postPayload);
       setSubmitting(false);
       if (onToast) onToast('投稿が完了しました！', 'success');
       onPostCreated();
       onClose();
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Post creation error:', e);
       setSubmitting(false);
-      if (onToast) onToast(`投稿に失敗しました: ${e.message || '権限エラー'}`, 'error');
+      const msg = e instanceof Error ? e.message : '権限エラー';
+      if (onToast) onToast(`投稿に失敗しました: ${msg}`, 'error');
     }
   }
 

@@ -12,9 +12,17 @@ import { formatFirestoreDate } from '../db/firestore';
 import {
   isSaved, toggleSave,
   getCurrentUser,
-  isFollowing, toggleFollow,
 } from '../db/store';
-import { subscribeToComments, addComment, toggleLikePost, type FirestoreComment, deletePost, subscribeToFollowingState } from '../db/firestore';
+import {
+  subscribeToComments,
+  addComment,
+  toggleLikePost,
+  type FirestoreComment,
+  deletePost,
+  subscribeToFollowingState,
+  subscribeToFollowRequestState,
+  sendFollowRequest,
+} from '../db/firestore';
 import CategoryBadge, { CATEGORY_COLOR_MAP } from './CategoryBadge';
 
 interface PostCardProps {
@@ -25,17 +33,6 @@ interface PostCardProps {
   onFollowUpdate?: () => void;
   onToast?: (message: string, type: 'success' | 'error') => void;
 }
-
-const PASTEL_CATEGORY_STYLES: Record<string, { bg: string; text: string; border: string; badgeBg: string }> = {
-  ES: { bg: 'rgba(37, 99, 235, 0.15)', text: '#3B82F6', border: 'rgba(37, 99, 235, 0.4)', badgeBg: 'rgba(37, 99, 235, 0.25)' },
-  テスト: { bg: 'rgba(139, 92, 246, 0.15)', text: '#A855F7', border: 'rgba(139, 92, 246, 0.4)', badgeBg: 'rgba(139, 92, 246, 0.25)' },
-  面接: { bg: 'rgba(239, 68, 68, 0.2)', text: '#EF4444', border: 'rgba(239, 68, 68, 0.5)', badgeBg: 'rgba(239, 68, 68, 0.3)' },
-  GD: { bg: 'rgba(236, 72, 153, 0.15)', text: '#EC4899', border: 'rgba(236, 72, 153, 0.4)', badgeBg: 'rgba(236, 72, 153, 0.25)' },
-  説明会: { bg: 'rgba(245, 158, 11, 0.15)', text: '#F59E0B', border: 'rgba(245, 158, 11, 0.4)', badgeBg: 'rgba(245, 158, 11, 0.25)' },
-  OB訪問: { bg: 'rgba(16, 185, 129, 0.15)', text: '#10B981', border: 'rgba(16, 185, 129, 0.4)', badgeBg: 'rgba(16, 185, 129, 0.25)' },
-  インターン: { bg: 'rgba(249, 115, 22, 0.15)', text: '#F97316', border: 'rgba(249, 115, 22, 0.4)', badgeBg: 'rgba(249, 115, 22, 0.25)' },
-  その他: { bg: 'rgba(100, 116, 139, 0.15)', text: '#94A3B8', border: 'rgba(100, 116, 139, 0.4)', badgeBg: 'rgba(100, 116, 139, 0.25)' },
-};
 
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
@@ -50,7 +47,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function PostCard({ post, onUpdate, onProfileClick, showFollowButton = true, onFollowUpdate, onToast }: PostCardProps) {
-  const { currentUser } = useAuth();
+  const { currentUser, profile: myProfile } = useAuth();
   const myId = currentUser?.uid;
   const { profile: author, loading: authorLoading } = useUserProfile(post.userId);
   const [liked, setLiked] = useState(post.likedUserIds?.includes(currentUser?.uid || '') || false);
@@ -60,7 +57,9 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
   const [comments, setComments] = useState<FirestoreComment[]>([]);
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState('');
-  const [following, setFollowing] = useState(isFollowing(post.userId));
+  const [following, setFollowing] = useState(false);
+  const [requestSent, setRequestSent] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
   const [likeAnimating, setLikeAnimating] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -68,14 +67,36 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
   const [needsExpand, setNeedsExpand] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
-  function handleFollowClick(e: React.MouseEvent) {
+  async function handleFollowClick(e: React.MouseEvent) {
     e.stopPropagation();
-    if (!author?.id) return;
-    const result = toggleFollow(author.id);
-    setFollowing(result);
-    onToast?.(result ? `${author.name}さんをフォローしました！` : `${author.name}さんのフォローを解除しました`, 'success');
-    onFollowUpdate?.();
-    onUpdate();
+    if (!currentUser || !post.userId || followLoading) return;
+    setFollowLoading(true);
+    try {
+      const res = await sendFollowRequest(
+        currentUser.uid,
+        post.userId,
+        myProfile?.name || currentUser.displayName || undefined,
+        myProfile?.avatar || currentUser.photoURL || undefined,
+      );
+      if (res.directlyFollowed) {
+        setFollowing(true);
+        onToast?.(`${author?.name || 'ユーザー'}さんをフォローしました！`, 'success');
+      } else {
+        if (res.error) {
+          onToast?.(`フォローに失敗しました: ${res.error}`, 'error');
+        } else {
+          setRequestSent(true);
+          onToast?.(`${author?.name || 'ユーザー'}さんにフォローリクエストを送信しました！`, 'success');
+        }
+      }
+      onFollowUpdate?.();
+      onUpdate();
+    } catch (err) {
+      console.error('Follow error in PostCard:', err);
+      onToast?.('フォロー処理中にエラーが発生しました', 'error');
+    } finally {
+      setFollowLoading(false);
+    }
   }
 
   async function handleDelete() {
@@ -106,10 +127,16 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
   // Firestoreのフォロー状態をリアルタイム同期
   useEffect(() => {
     if (!myId || !post.userId || post.userId === myId) return;
-    const unsub = subscribeToFollowingState(myId, post.userId, (isFol) => {
+    const unsubFollowing = subscribeToFollowingState(myId, post.userId, (isFol) => {
       setFollowing(isFol);
     });
-    return () => unsub();
+    const unsubRequest = subscribeToFollowRequestState(myId, post.userId, (isPending) => {
+      setRequestSent(isPending);
+    });
+    return () => {
+      unsubFollowing();
+      unsubRequest();
+    };
   }, [myId, post.userId]);
 
   useEffect(() => {
@@ -167,8 +194,8 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
   if (!author) return null;
 
   return (
-    <article className="card card-hover animate-fadeInUp" id={`post-${post.id}`} style={{ marginBottom: 12, overflow: 'hidden' }}>
-      <div style={{ padding: '14px 16px' }}>
+    <article className="card card-hover animate-fadeInUp" id={`post-${post.id}`} style={{ marginBottom: 14, overflow: 'hidden', border: '1px solid var(--border-color)', borderRadius: 16 }}>
+      <div style={{ padding: '16px 18px' }}>
         {/* Header */}
         <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 12 }}>
           <button
@@ -179,9 +206,10 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
           >
             <span style={{
               width: 40, height: 40, borderRadius: '50%',
-              background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
+              background: 'linear-gradient(135deg, #3B82F6, #1D4ED8)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.25rem', overflow: 'hidden', flexShrink: 0
+              fontSize: '1.125rem', overflow: 'hidden', flexShrink: 0,
+              boxShadow: '0 2px 6px rgba(59, 130, 246, 0.2)',
             }}>
               {author.avatar && (author.avatar.startsWith('http') || author.avatar.startsWith('data:') || author.avatar.startsWith('/')) ? (
                 <img src={author.avatar} alt={author.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -195,7 +223,7 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <button
                 onClick={() => onProfileClick?.(post.userId)}
-                style={{ fontWeight: 600, fontSize: '0.9375rem', cursor: 'pointer', border: 'none', background: 'none', padding: 0, color: 'var(--text-primary)' }}
+                style={{ fontWeight: 700, fontSize: '0.9375rem', cursor: 'pointer', border: 'none', background: 'none', padding: 0, color: 'var(--text-primary)', letterSpacing: '-0.01em' }}
               >
                 {author.name}
               </button>
@@ -211,29 +239,31 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                   display: 'inline-block'
                 }}>自分</span>
               )}
-              {/* フォローしていない場合のみ「+ フォロー」ボタンを表示 */}
+              {/* フォローしていない場合のみ「+ フォロー」/「申請中」ボタンを表示 */}
               {showFollowButton && post.userId !== myId && !following && (
                 <button
                   onClick={handleFollowClick}
+                  disabled={followLoading || requestSent}
                   style={{
                     padding: '2px 10px',
                     borderRadius: 'var(--border-radius-full)',
                     fontSize: '0.72rem',
                     fontWeight: 700,
                     fontFamily: 'inherit',
-                    cursor: 'pointer',
-                    background: 'var(--color-primary)',
-                    color: 'white',
-                    border: 'none',
+                    cursor: followLoading || requestSent ? 'default' : 'pointer',
+                    background: requestSent ? 'var(--bg-surface-2)' : 'var(--color-primary)',
+                    color: requestSent ? 'var(--text-muted)' : 'white',
+                    border: requestSent ? '1px solid var(--border-color)' : 'none',
+                    opacity: followLoading ? 0.7 : 1,
                     transition: 'all var(--transition-fast)',
                   }}
-                  aria-label="フォローする"
+                  aria-label={requestSent ? 'フォロー申請中' : 'フォローする'}
                 >
-                  + フォロー
+                  {followLoading ? '処理中...' : requestSent ? '申請中' : '+ フォロー'}
                 </button>
               )}
             </div>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
               {timeAgo(formatFirestoreDate(post.createdAt))}
             </div>
           </div>
@@ -281,13 +311,14 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
         </div>
 
         {/* 感想・本文コメント (一番上に表示) */}
-        <div style={{ position: 'relative', marginBottom: 10, marginTop: 4 }}>
+        <div style={{ position: 'relative', marginBottom: 12, marginTop: 4 }}>
           <p
             ref={textRef}
             style={{
-              fontSize: '0.9rem',
+              fontSize: '0.9375rem',
               color: 'var(--text-primary)',
-              lineHeight: 1.65,
+              lineHeight: 1.68,
+              letterSpacing: '0.01em',
               whiteSpace: 'pre-line',
               maxHeight: expanded ? 'none' : '90px',
               overflow: expanded ? 'visible' : 'hidden',
@@ -307,7 +338,7 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
         {needsExpand && (
           <button
             onClick={() => setExpanded(!expanded)}
-            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 500, marginBottom: 10, border: 'none', background: 'none', cursor: 'pointer' }}
+            style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 600, marginBottom: 10, border: 'none', background: 'none', cursor: 'pointer' }}
           >
             {expanded ? <><ChevronUp size={14} /> 折りたたむ</> : <><ChevronDown size={14} /> 続きを読む</>}
           </button>
@@ -325,10 +356,10 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
           const theme = CATEGORY_COLOR_MAP[post.category] || CATEGORY_COLOR_MAP['その他'];
           return (
             <div style={{
-              background: '#FAFAFC',
-              border: '1px solid #F1F5F9',
-              borderRadius: 14,
-              padding: '10px 14px',
+              background: 'var(--bg-surface-2)',
+              border: '1px solid var(--border-color)',
+              borderRadius: 12,
+              padding: '8px 12px',
               marginBottom: 12,
               display: 'flex',
               alignItems: 'center',
@@ -336,7 +367,7 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
               gap: 10,
               boxShadow: 'none',
             }}>
-              {/* 左側: 大カテゴリバッジ ＋ 詳細サブタグ (極薄パステルカラー) */}
+              {/* 左側: 大カテゴリバッジ ＋ 詳細サブタグ (最適化カラー) */}
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{
                   background: theme.bg,
@@ -346,7 +377,7 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                   borderRadius: 20,
                   fontSize: '0.75rem',
                   fontWeight: 600,
-                  letterSpacing: '0.2px',
+                  letterSpacing: '0.02em',
                   boxShadow: 'none',
                 }}>
                   {post.category}
@@ -354,13 +385,13 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
 
                 {post.tags && post.tags.length > 0 && (
                   <span style={{
-                    background: '#FFFFFF',
+                    background: 'var(--bg-surface)',
                     color: 'var(--text-secondary)',
                     padding: '3px 10px',
                     borderRadius: 20,
                     fontSize: '0.75rem',
                     fontWeight: 500,
-                    border: '1px solid #E2E8F0',
+                    border: '1px solid var(--border-color)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     gap: 4,
@@ -400,10 +431,10 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
         })()}
 
         {/* Divider */}
-        <hr className="divider" style={{ marginBottom: 12 }} />
+        <hr className="divider" style={{ marginBottom: 8, borderColor: 'var(--border-color)' }} />
 
-        {/* Action Bar (保存とシェアは削除、いいねとコメントのみ) */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {/* Action Bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, paddingTop: 4 }}>
           {/* Like */}
           <button
             onClick={handleLike}
@@ -413,6 +444,8 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
               color: liked ? '#EF4444' : 'var(--text-muted)',
               fontWeight: liked ? 700 : 500,
               fontSize: '0.8125rem',
+              padding: '6px 12px',
+              borderRadius: 'var(--border-radius-full)',
             }}
             aria-label="いいね"
           >
@@ -431,7 +464,13 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
           <button
             onClick={() => setShowComments(!showComments)}
             className="btn btn-ghost btn-sm"
-            style={{ gap: 6, color: showComments ? 'var(--color-primary)' : 'var(--text-muted)', fontSize: '0.8125rem' }}
+            style={{
+              gap: 6,
+              color: showComments ? 'var(--color-primary)' : 'var(--text-muted)',
+              fontSize: '0.8125rem',
+              padding: '6px 12px',
+              borderRadius: 'var(--border-radius-full)',
+            }}
             aria-label="コメント"
           >
             <MessageCircle size={16} />

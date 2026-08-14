@@ -10,6 +10,7 @@ import {
   rejectFollowRequest,
   subscribeToNotifications,
   markAllNotificationsReadFirestore,
+  markNotificationReadFirestore,
   deleteNotificationFirestore,
   deleteCalendarEvent,
   type FirestoreFollowRequest,
@@ -22,15 +23,15 @@ interface NotificationSectionProps {
   onProfileClick: (userId: string) => void;
 }
 
-function timeAgo(dateVal: any): string {
+function timeAgo(dateVal: import('firebase/firestore').Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined): string {
   if (!dateVal) return 'たった今';
   let date: Date;
   if (dateVal instanceof Date) {
     date = dateVal;
-  } else if (typeof dateVal?.toDate === 'function') {
+  } else if (typeof dateVal === 'object' && 'toDate' in dateVal && typeof dateVal.toDate === 'function') {
     date = dateVal.toDate();
   } else {
-    date = new Date(dateVal);
+    date = new Date(dateVal as string | number);
   }
   if (isNaN(date.getTime())) return 'たった今';
   const diff = Date.now() - date.getTime();
@@ -138,11 +139,15 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     onUpdate();
   }
 
-  function handleMarkAllRead() {
+  async function handleMarkAllRead() {
     markAllNotificationsRead();
     if (currentUser) {
-      markAllNotificationsReadFirestore(currentUser.uid);
-      setFirestoreNotifs(prev => prev.map(n => ({ ...n, read: true })));
+      setFirestoreNotifs((prev) => prev.map((n) => ({ ...n, read: true })));
+      try {
+        await markAllNotificationsReadFirestore(currentUser.uid);
+      } catch (err) {
+        console.error('Failed to mark all notifications as read in Firestore:', err);
+      }
     }
     setNotifications(getNotifications());
     onUpdate();
@@ -443,7 +448,12 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                 >
                   <div
                     style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, cursor: 'pointer' }}
-                    onClick={() => onProfileClick(notif.fromUid)}
+                    onClick={() => {
+                      if (currentUser && notif.id && !notif.read) {
+                        markNotificationReadFirestore(currentUser.uid, notif.id);
+                      }
+                      onProfileClick(notif.fromUid);
+                    }}
                   >
                     <div style={{
                       width: 36, height: 36, borderRadius: '50%',

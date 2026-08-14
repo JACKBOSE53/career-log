@@ -35,11 +35,11 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
     firestorePosts.forEach((p) => { if (p.id) map.set(p.id, p); });
     
     const sorted = Array.from(map.values()).sort((a, b) => {
-      const getMillis = (dateVal: any) => {
+      const getMillis = (dateVal: import('firebase/firestore').Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined) => {
         if (!dateVal) return new Date().getTime();
         if (dateVal instanceof Date) return dateVal.getTime();
-        if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
-        return new Date(dateVal).getTime() || new Date().getTime();
+        if (typeof dateVal === 'object' && 'toDate' in dateVal && typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
+        return new Date(dateVal as string | number).getTime() || new Date().getTime();
       };
       return getMillis(b.createdAt) - getMillis(a.createdAt);
     });

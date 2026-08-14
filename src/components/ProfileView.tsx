@@ -5,9 +5,7 @@ import {
 } from 'lucide-react';
 import type { JobStatus } from '../db/mockData';
 import { JOB_STATUS_CONFIG, CATEGORIES } from '../db/mockData';
-import {
-  isFollowing, toggleFollow,
-} from '../db/store';
+
 import { useUserProfile } from '../hooks/useUserProfile';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -39,7 +37,7 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   const { profile: user, loading: userLoading } = useUserProfile(userId);
   const { currentUser, profile: myProfile } = useAuth();
   const [posts, setPosts] = useState<FirestorePost[]>([]);
-  const [following, setFollowing] = useState(isFollowing(userId));
+  const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);

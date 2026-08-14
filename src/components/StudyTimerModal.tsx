@@ -17,15 +17,17 @@ export default function StudyTimerModal({ onClose, onPostCreated, onToast }: Stu
   const [showPostModal, setShowPostModal] = useState(false);
 
   useEffect(() => {
-    let interval: any = null;
+    let interval: ReturnType<typeof setInterval> | null = null;
     if (isRunning) {
       interval = setInterval(() => {
         setSeconds((s) => s + 1);
       }, 1000);
     } else if (!isRunning && seconds !== 0) {
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     }
-    return () => clearInterval(interval);
+    return () => {
+      if (interval) clearInterval(interval);
+    };
   }, [isRunning, seconds]);
 
   function handleStart() {
