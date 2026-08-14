@@ -5,7 +5,7 @@ import {
   searchUsersFirestore,
   sendFollowRequest,
   unfollowUser,
-  subscribeToPosts,
+  subscribeToTimelinePosts,
   subscribeToUserProfile,
   subscribeToFollowingState,
   subscribeToFollowRequestState,
@@ -22,17 +22,18 @@ interface SearchSectionProps {
 }
 
 export default function SearchSection({ onUpdate, onProfileClick }: SearchSectionProps) {
+  const { currentUser } = useAuth();
   const [query, setQuery] = useState('');
   const [allPosts, setAllPosts] = useState<FirestorePost[]>([]);
   const [results, setResults] = useState<{ posts: FirestorePost[]; users: UserProfile[] } | null>(null);
   const [tab, setTab] = useState<'posts' | 'users'>('posts');
 
   useEffect(() => {
-    const unsubPosts = subscribeToPosts(setAllPosts);
+    const unsubPosts = subscribeToTimelinePosts(currentUser?.uid, setAllPosts);
     return () => {
       unsubPosts();
     };
-  }, []);
+  }, [currentUser]);
 
   async function handleSearch(q: string) {
     setQuery(q);
