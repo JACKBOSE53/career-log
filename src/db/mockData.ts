@@ -132,6 +132,7 @@ export interface CountdownEvent {
   endTime?: string;   // 例: '15:30' (終了時間)
   location?: string; // 例: 'オンライン (Zoom)' / 'テストセンター新宿'
   priority?: 'high' | 'medium' | 'low'; // 第一志望群 / 第二志望群 / 練習
+  completed?: boolean; // 完了マーク
 }
 
 export interface WeeklyGoal {

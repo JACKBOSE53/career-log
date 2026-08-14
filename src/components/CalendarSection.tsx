@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
-  Clock, Trash2, Edit3, X, AlertCircle, CheckCircle2, MapPin, Bell,
+  Clock, Trash2, Edit3, X, AlertCircle, CheckCircle2, Check, MapPin, Bell, MoreVertical,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -51,6 +51,18 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
   const [countdowns, setCountdowns] = useState<CountdownEvent[]>([]);
   const { currentUser } = useAuth();
   const [myPosts, setMyPosts] = useState<FirestorePost[]>([]);
+  const [openMenuEventId, setOpenMenuEventId] = useState<string | null>(null);
+
+  // 外側クリックでメニューを閉じる
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (openMenuEventId && !(e.target as HTMLElement).closest('.event-menu-container')) {
+        setOpenMenuEventId(null);
+      }
+    }
+    window.addEventListener('click', handleClickOutside);
+    return () => window.removeEventListener('click', handleClickOutside);
+  }, [openMenuEventId]);
 
   // 1分ごとに日付変更をチェックして自動で今日に更新
   useEffect(() => {
@@ -80,6 +92,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
         time: e.time,
         location: e.location,
         priority: e.priority || 'high',
+        completed: Boolean(e.completed),
       }));
       setCountdowns(mapped);
     });
@@ -198,6 +211,17 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     setTimeout(() => {
       window.location.reload();
     }, 350);
+  }
+
+  async function handleToggleComplete(ev: CountdownEvent) {
+    setOpenMenuEventId(null);
+    const newCompleted = !ev.completed;
+    await updateCalendarEvent(ev.id, { completed: newCompleted });
+    onUpdate();
+    onToast?.(
+      newCompleted ? `「${ev.title}」を完了にしました！🎉` : `「${ev.title}」を未完了に戻しました`,
+      'success'
+    );
   }
 
   // 選択中の日付に該当するカウントダウンイベント (単日および複数日跨ぎに対応)
@@ -542,8 +566,8 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       const isWeekStart = cell.dayOfWeek === 0;
                       const isWeekEnd = cell.dayOfWeek === 6;
 
-                      // タイトルの短縮表示（会社名またはタイトル）
-                      const displayTitle = ev.company || ev.title;
+                      // タイトルの短縮表示（会社名またはタイトル、完了時はチェック付き）
+                      const displayTitle = (ev.completed ? '✔ ' : '') + (ev.company || ev.title);
 
                       if (isMulti) {
                         // 連日イベント（透明感ある帯で繋げる・黒ずみ影なし）
@@ -733,12 +757,35 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                           </span>
                         )}
 
+                        {/* 完了マーク表示 */}
+                        {ev.completed && (
+                          <span style={{
+                            background: '#10B981',
+                            color: 'white',
+                            padding: '1px 8px',
+                            borderRadius: 99,
+                            fontSize: '0.68rem',
+                            fontWeight: 800,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                          }}>
+                            <Check size={11} strokeWidth={3} /> 完了
+                          </span>
+                        )}
+
                         <span className="badge" style={{ background: 'var(--bg-surface)', color: isPast ? '#94A3B8' : style.text, border: `1px solid ${isPast ? '#334155' : style.border}`, fontSize: '0.68rem', fontWeight: 700 }}>
                           {ev.category}
                         </span>
                       </div>
 
-                      <div style={{ fontWeight: 700, fontSize: '0.925rem', color: isPast ? '#94A3B8' : 'var(--text-primary)', textDecoration: isPast ? 'line-through' : 'none' }}>
+                      <div style={{
+                        fontWeight: 700,
+                        fontSize: '0.925rem',
+                        color: ev.completed ? 'var(--text-muted)' : isPast ? '#94A3B8' : 'var(--text-primary)',
+                        textDecoration: ev.completed || isPast ? 'line-through' : 'none',
+                        opacity: ev.completed ? 0.75 : 1,
+                      }}>
                         {ev.title}
                       </div>
 
@@ -757,23 +804,123 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       </div>
                     </div>
 
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                    {/* ── 3点リーダー (︙) メニューボタン ── */}
+                    <div className="event-menu-container" style={{ position: 'relative', flexShrink: 0 }}>
                       <button
-                        onClick={() => handleOpenEditModal(ev)}
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--color-primary)', padding: '6px 8px', fontSize: '0.78rem', gap: 4 }}
-                        title="編集"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuEventId(openMenuEventId === ev.id ? null : ev.id);
+                        }}
+                        className="btn btn-ghost btn-icon btn-sm"
+                        style={{
+                          color: 'var(--text-secondary)',
+                          padding: '6px 8px',
+                          borderRadius: 8,
+                        }}
+                        title="メニュー"
+                        aria-label="メニュー"
                       >
-                        <Edit3 size={15} /> 編集
+                        <MoreVertical size={18} />
                       </button>
-                      <button
-                        onClick={() => handleDeleteEvent(ev.id)}
-                        className="btn btn-ghost btn-sm"
-                        style={{ color: 'var(--text-muted)', padding: '6px 8px', fontSize: '0.78rem', gap: 4 }}
-                        title="削除"
-                      >
-                        <Trash2 size={15} /> 削除
-                      </button>
+
+                      {openMenuEventId === ev.id && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            right: 0,
+                            top: 'calc(100% + 4px)',
+                            background: 'var(--bg-surface)',
+                            border: '1px solid var(--border-color)',
+                            borderRadius: 12,
+                            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.18)',
+                            zIndex: 100,
+                            minWidth: 160,
+                            padding: '6px',
+                            animation: 'fadeIn 0.15s ease',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {/* 完了マークをつける / 解除 */}
+                          <button
+                            onClick={() => handleToggleComplete(ev)}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: 'transparent',
+                              color: ev.completed ? 'var(--text-secondary)' : '#10B981',
+                              fontSize: '0.8125rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background 0.12s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <CheckCircle2 size={15} color={ev.completed ? 'var(--text-muted)' : '#10B981'} />
+                            {ev.completed ? '未完了に戻す' : '完了マークをつける'}
+                          </button>
+
+                          {/* 予定を編集 */}
+                          <button
+                            onClick={() => { setOpenMenuEventId(null); handleOpenEditModal(ev); }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: 'transparent',
+                              color: 'var(--text-primary)',
+                              fontSize: '0.8125rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background 0.12s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--bg-surface-2)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <Edit3 size={15} color="var(--color-primary)" />
+                            予定を編集
+                          </button>
+
+                          <div style={{ height: 1, background: 'var(--border-color)', margin: '4px 0' }} />
+
+                          {/* 予定を消す */}
+                          <button
+                            onClick={() => { setOpenMenuEventId(null); handleDeleteEvent(ev.id); }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 8,
+                              width: '100%',
+                              padding: '8px 10px',
+                              borderRadius: 8,
+                              border: 'none',
+                              background: 'transparent',
+                              color: '#EF4444',
+                              fontSize: '0.8125rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              textAlign: 'left',
+                              transition: 'background 0.12s ease',
+                            }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >
+                            <Trash2 size={15} color="#EF4444" />
+                            予定を消す
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

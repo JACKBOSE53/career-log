@@ -976,6 +976,7 @@ export interface FirestoreCalendarEvent {
   priority?: 'high' | 'medium' | 'low';
   location?: string;
   memo?: string;
+  completed?: boolean; // 完了マーク
   createdAt: Timestamp | Date;
 }
 

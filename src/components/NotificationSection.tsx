@@ -12,7 +12,6 @@ import {
   markAllNotificationsReadFirestore,
   markNotificationReadFirestore,
   deleteNotificationFirestore,
-  deleteCalendarEvent,
   type FirestoreFollowRequest,
   type FirestoreNotificationData,
 } from '../db/firestore';
@@ -55,21 +54,35 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [tab, setTab] = useState<'all' | 'requests' | 'reminders'>('all');
 
+  // リマインダー通知の非表示IDリストを取得
+  function getDismissedReminderIds(): string[] {
+    try {
+      return JSON.parse(localStorage.getItem('dismissed_calendar_reminders') || '[]');
+    } catch {
+      return [];
+    }
+  }
+
   useEffect(() => {
     if (!currentUser) return;
     const unsub = subscribeToCalendarEvents(currentUser.uid, (events) => {
       const todayStr = getLocalDateStr();
       const todayMs = new Date(todayStr).getTime();
+      const dismissed = getDismissedReminderIds();
 
       const reminders: { id: string; title: string; daysLeft: number; priority?: string; date: string; category: string }[] = [];
 
       events.forEach((ev) => {
+        const evId = ev.id || ev.date + ev.title;
+        // 完了済みまたは非表示にしたリマインダーは除外
+        if (ev.completed || dismissed.includes(evId)) return;
+
         const evMs = new Date(ev.date).getTime();
         const diffDays = Math.round((evMs - todayMs) / (1000 * 60 * 60 * 24));
 
         if (diffDays === 3 || diffDays === 1 || diffDays === 0) {
           reminders.push({
-            id: ev.id || ev.date + ev.title,
+            id: evId,
             title: ev.title,
             daysLeft: diffDays,
             priority: ev.priority,
@@ -133,10 +146,14 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     onUpdate();
   }
 
-  async function handleDeleteReminder(eventId: string) {
-    await deleteCalendarEvent(eventId);
+  // ⚠️ リマインダー通知を閉じる（カレンダーの予定は絶対に削除しない）
+  function handleDismissReminder(eventId: string) {
+    const dismissed = getDismissedReminderIds();
+    if (!dismissed.includes(eventId)) {
+      dismissed.push(eventId);
+      localStorage.setItem('dismissed_calendar_reminders', JSON.stringify(dismissed));
+    }
     setCalendarReminders((prev) => prev.filter((r) => r.id !== eventId));
-    onUpdate();
   }
 
   async function handleMarkAllRead() {
@@ -404,12 +421,12 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                     </div>
 
                     <button
-                      onClick={() => handleDeleteReminder(rem.id)}
+                      onClick={() => handleDismissReminder(rem.id)}
                       className="btn btn-ghost btn-icon btn-sm"
                       style={{ color: 'var(--text-muted)', padding: 6 }}
-                      title="アラームを削除"
+                      title="通知を閉じる（※カレンダーの予定は残ります）"
                     >
-                      <Trash2 size={16} />
+                      <X size={16} />
                     </button>
                   </div>
                 );
