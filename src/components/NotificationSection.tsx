@@ -467,9 +467,12 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
                     style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, cursor: 'pointer' }}
                     onClick={() => {
                       if (currentUser && notif.id && !notif.read) {
+                        setFirestoreNotifs((prev) => prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n)));
                         markNotificationReadFirestore(currentUser.uid, notif.id);
                       }
-                      onProfileClick(notif.fromUid);
+                      if (notif.fromUid) {
+                        onProfileClick(notif.fromUid);
+                      }
                     }}
                   >
                     <div style={{

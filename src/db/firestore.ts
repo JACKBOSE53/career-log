@@ -471,7 +471,7 @@ export function subscribeToNotifications(
 
 export async function markNotificationReadFirestore(userId: string, notificationId: string) {
   const ref = doc(db, `users/${userId}/notifications`, notificationId);
-  await updateDoc(ref, { read: true });
+  await updateDoc(ref, { read: true, isRead: true });
 }
 
 export async function markAllNotificationsReadFirestore(userId: string) {
