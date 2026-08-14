@@ -10,6 +10,7 @@ import {
   query,
   where,
   orderBy,
+  limit,
   onSnapshot,
   serverTimestamp,
   increment,
@@ -46,6 +47,7 @@ export interface FirestorePost {
   tags: string[];
   studyMinutes?: number;
   imageUrl?: string;
+  date?: string; // YYYY-MM-DD
   visibility?: 'public' | 'followers' | 'private'; // 公開範囲
   likesCount: number;
   commentsCount: number;
@@ -128,16 +130,14 @@ export async function sendFollowRequest(
       await updateDoc(doc(db, 'users', fromUid), { followingCount: increment(1) });
 
       // 4. 相手へのフォロー完了通知を送信
-      const notifData = {
-        type: 'follow_accept',
+      await createFirestoreNotification({
+        userId: toUid,
         fromUid: fromUid,
         fromName: senderName || 'ユーザー',
         fromAvatar: senderAvatar || '',
-        text: 'あなたをフォローしました',
-        createdAt: serverTimestamp(),
-        isRead: false,
-      };
-      await addDoc(collection(db, `users/${toUid}/notifications`), notifData);
+        type: 'follow_accept',
+        content: 'あなたをフォローしました',
+      });
 
       return { directlyFollowed: true };
     } catch (e) {
@@ -454,7 +454,11 @@ export function subscribeToNotifications(
   userId: string,
   callback: (notifications: FirestoreNotificationData[]) => void,
 ) {
-  const q = query(collection(db, `users/${userId}/notifications`), orderBy('createdAt', 'desc'));
+  const q = query(
+    collection(db, `users/${userId}/notifications`),
+    orderBy('createdAt', 'desc'),
+    limit(50)
+  );
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({
       ...d.data(),
@@ -471,13 +475,20 @@ export async function markNotificationReadFirestore(userId: string, notification
 }
 
 export async function markAllNotificationsReadFirestore(userId: string) {
-  const q = query(collection(db, `users/${userId}/notifications`), where('read', '==', false));
-  const snap = await getDocs(q);
+  const ref = collection(db, `users/${userId}/notifications`);
+  const snap = await getDocs(ref);
   const batch = writeBatch(db);
+  let count = 0;
   snap.docs.forEach((d) => {
-    batch.update(d.ref, { read: true });
+    const data = d.data();
+    if (!data.read || data.isRead === false) {
+      batch.update(d.ref, { read: true, isRead: true });
+      count++;
+    }
   });
-  await batch.commit();
+  if (count > 0) {
+    await batch.commit();
+  }
 }
 
 // ─── User Profile ─────────────────────────────────────────────────────────────
@@ -533,9 +544,9 @@ export function getLocalPosts(): FirestorePost[] {
     const raw = localStorage.getItem(LOCAL_POSTS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return parsed.map((p: any) => ({
+    return parsed.map((p: Record<string, unknown>) => ({
       ...p,
-      createdAt: p.createdAt ? new Date(p.createdAt) : new Date(),
+      createdAt: p.createdAt ? new Date(p.createdAt as string) : new Date(),
     }));
   } catch (e) {
     return [];
@@ -562,7 +573,7 @@ export function saveLocalPost(post: FirestorePost) {
 // ─── Posts ────────────────────────────────────────────────────────────────────
 export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt' | 'likesCount' | 'commentsCount'>) {
   const postsRef = collection(db, 'posts');
-  const cleanData: Record<string, any> = {
+  const cleanData: Record<string, unknown> = {
     likesCount: 0,
     commentsCount: 0,
     likedUserIds: [],
@@ -579,28 +590,12 @@ export async function createPost(postData: Omit<FirestorePost, 'id' | 'createdAt
   notifyDataUpdated();
 }
 
-function getMillis(dateVal: any): number {
+function getMillis(dateVal: Timestamp | Date | string | number | { toDate?: () => Date; seconds?: number } | null | undefined): number {
   if (!dateVal) return 0;
   if (dateVal instanceof Date) return dateVal.getTime();
-  if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
-  if (typeof dateVal.seconds === 'number') return dateVal.seconds * 1000;
-  return new Date(dateVal).getTime() || 0;
-}
-
-export function subscribeToPosts(callback: (posts: FirestorePost[]) => void) {
-  const q = query(collection(db, 'posts'));
-  return onSnapshot(q, (snapshot) => {
-    const posts = snapshot.docs.map(doc => {
-      const data = doc.data();
-      const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-      return { ...data, id: doc.id, createdAt: date };
-    }) as FirestorePost[];
-    const sorted = posts.sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
-    callback(sorted);
-  }, (err) => {
-    console.warn('Firestore subscribe error:', err);
-    callback([]);
-  });
+  if (typeof dateVal === 'object' && 'toDate' in dateVal && typeof dateVal.toDate === 'function') return dateVal.toDate().getTime();
+  if (typeof dateVal === 'object' && 'seconds' in dateVal && typeof dateVal.seconds === 'number') return dateVal.seconds * 1000;
+  return new Date(dateVal as string | number).getTime() || 0;
 }
 
 export function subscribeToTimelinePosts(
@@ -678,7 +673,7 @@ export function subscribeToTimelinePosts(
   };
 }
 
-export function formatFirestoreDateLocal(date: any): string {
+export function formatFirestoreDateLocal(date: Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined): string {
   try {
     if (!date) {
       const now = new Date();
@@ -689,7 +684,7 @@ export function formatFirestoreDateLocal(date: any): string {
     }
     const d = date instanceof Date 
       ? date 
-      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
+      : (typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function' ? date.toDate() : new Date(date as string | number));
     if (isNaN(d.getTime())) {
       const now = new Date();
       return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
@@ -705,7 +700,7 @@ export function formatFirestoreDateLocal(date: any): string {
   }
 }
 
-export function getPostDateStr(post: { date?: string; createdAt?: any }): string {
+export function getPostDateStr(post: { date?: string; createdAt?: Timestamp | Date | string | number | { toDate?: () => Date } | null }): string {
   if (post.date && /^\d{4}-\d{2}-\d{2}$/.test(post.date)) {
     return post.date;
   }
@@ -920,11 +915,11 @@ export function subscribeToComments(postId: string, callback: (comments: Firesto
         } as FirestoreComment;
       });
 
-      const getTimeMs = (val: any) => {
+      const getTimeMs = (val: Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined) => {
         if (!val) return 0;
         if (val instanceof Date) return val.getTime();
-        if (typeof val.toDate === 'function') return val.toDate().getTime();
-        return 0;
+        if (typeof val === 'object' && 'toDate' in val && typeof val.toDate === 'function') return val.toDate().getTime();
+        return new Date(val as string | number).getTime() || 0;
       };
 
       // JS側で作成日時順（昇順）にソート
@@ -951,12 +946,12 @@ export async function deleteNotificationFirestore(userId: string, notifId: strin
 
 // ─── Utilities ────────────────────────────────────────────────────────────────
 // FirestoreのTimestamp型を文字列に変換（UI表示用）
-export function formatFirestoreDate(date: any): string {
+export function formatFirestoreDate(date: Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined): string {
   if (!date) return '';
   try {
     const d = date instanceof Date 
       ? date 
-      : (typeof date.toDate === 'function' ? date.toDate() : new Date(date));
+      : (typeof date === 'object' && 'toDate' in date && typeof date.toDate === 'function' ? date.toDate() : new Date(date as string | number));
     if (isNaN(d.getTime())) return '';
     return d.toISOString();
   } catch (e) {
