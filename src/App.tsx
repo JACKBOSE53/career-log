@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import './App.css';
 import Sidebar, { BottomNav } from './components/Sidebar';
 import type { Page } from './components/Sidebar';
@@ -10,7 +10,7 @@ import NotificationSection from './components/NotificationSection';
 import ProfileView from './components/ProfileView';
 import CreatePostModal from './components/CreatePostModal';
 import StudyTimerModal from './components/StudyTimerModal';
-import { getUnreadCount } from './db/store';
+import { subscribeToNotifications, subscribeToFollowRequests } from './db/firestore';
 import { useAuth } from './contexts/AuthContext';
 import LoginPage from './pages/LoginPage';
 import OnboardingPage from './pages/OnboardingPage';
@@ -47,10 +47,33 @@ export default function App() {
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(getUnreadCount());
+  const [unreadCount, setUnreadCount] = useState(0);
   const [tick, setTick] = useState(0);
   const [toast, setToast] = useState<ToastState>({ show: false, message: '', type: 'success' });
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  // Firestoreの未読通知数をリアルタイムに反映（通知 + フォローリクエストの合計）
+  const notifCountRef = useRef(0);
+  const reqCountRef = useRef(0);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const unsubNotifs = subscribeToNotifications(currentUser.uid, (notifs) => {
+      notifCountRef.current = notifs.filter((n) => !n.read).length;
+      setUnreadCount(notifCountRef.current + reqCountRef.current);
+    });
+
+    const unsubReqs = subscribeToFollowRequests(currentUser.uid, (reqs) => {
+      reqCountRef.current = reqs.length;
+      setUnreadCount(notifCountRef.current + reqCountRef.current);
+    });
+
+    return () => {
+      unsubNotifs();
+      unsubReqs();
+    };
+  }, [currentUser]);
 
   // URLの ?profile=xxx を読み取って自動遷移
   useEffect(() => {
@@ -72,16 +95,12 @@ export default function App() {
   }, []);
 
   const handleUpdate = useCallback(() => {
-    setUnreadCount(getUnreadCount());
     setTick((t) => t + 1);
   }, []);
 
   function handleNavigate(page: Page) {
     setCurrentPage(page);
     setProfileUserId(null);
-    if (page === 'notifications') {
-      setTimeout(() => setUnreadCount(getUnreadCount()), 200);
-    }
   }
 
   function handleProfileClick(userId: string) {

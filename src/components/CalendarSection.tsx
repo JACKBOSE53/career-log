@@ -27,18 +27,18 @@ interface CalendarSectionProps {
 }
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  ES: { bg: 'rgba(59, 130, 246, 0.12)', text: '#60A5FA', border: 'rgba(59, 130, 246, 0.3)' },
-  テスト: { bg: 'rgba(168, 85, 247, 0.12)', text: '#C084FC', border: 'rgba(168, 85, 247, 0.3)' },
-  '1次面接': { bg: 'rgba(239, 68, 68, 0.12)', text: '#F87171', border: 'rgba(239, 68, 68, 0.3)' },
-  '2次面接': { bg: 'rgba(220, 38, 38, 0.15)', text: '#EF4444', border: 'rgba(220, 38, 38, 0.35)' },
-  '最終面接': { bg: 'rgba(185, 28, 28, 0.2)', text: '#DC2626', border: 'rgba(185, 28, 28, 0.4)' },
-  'AI・動画面接': { bg: 'rgba(6, 182, 212, 0.12)', text: '#22D3EE', border: 'rgba(6, 182, 212, 0.3)' },
-  '面談・リクルーター': { bg: 'rgba(16, 185, 129, 0.12)', text: '#34D399', border: 'rgba(16, 185, 129, 0.3)' },
-  GD: { bg: 'rgba(236, 72, 153, 0.12)', text: '#F472B6', border: 'rgba(236, 72, 153, 0.3)' },
-  説明会: { bg: 'rgba(245, 158, 11, 0.12)', text: '#FBBF24', border: 'rgba(245, 158, 11, 0.3)' },
-  OB訪問: { bg: 'rgba(217, 119, 6, 0.12)', text: '#F59E0B', border: 'rgba(217, 119, 6, 0.3)' },
-  インターン: { bg: 'rgba(249, 115, 22, 0.12)', text: '#FB923C', border: 'rgba(249, 115, 22, 0.3)' },
-  その他: { bg: 'rgba(148, 163, 184, 0.12)', text: '#94A3B8', border: 'rgba(148, 163, 184, 0.3)' },
+  ES: { bg: '#F4F6FF', text: '#4F46E5', border: '#E0E7FF' },
+  テスト: { bg: '#FAF5FF', text: '#9333EA', border: '#F3E8FF' },
+  '1次面接': { bg: '#FFF5F5', text: '#E11D48', border: '#FFE4E6' },
+  '2次面接': { bg: '#FFF1F2', text: '#BE123C', border: '#FECDD3' },
+  '最終面接': { bg: '#FFE4E6', text: '#9F1239', border: '#FDA4AF' },
+  'AI・動画面接': { bg: '#ECFEFF', text: '#0891B2', border: '#CFFAFE' },
+  '面談・リクルーター': { bg: '#F0FDF4', text: '#16A34A', border: '#DCFCE7' },
+  GD: { bg: '#FFF5F9', text: '#DB2777', border: '#FCE7F3' },
+  説明会: { bg: '#FFFDF0', text: '#D97706', border: '#FEF3C7' },
+  OB訪問: { bg: '#F2FDF7', text: '#059669', border: '#D1FAE5' },
+  インターン: { bg: '#FFF9F5', text: '#EA580C', border: '#FFEDD5' },
+  その他: { bg: '#F8FAFC', text: '#64748B', border: '#E2E8F0' },
 };
 
 function getCategoryStyle(cat: string) {

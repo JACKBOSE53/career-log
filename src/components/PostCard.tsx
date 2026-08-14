@@ -14,8 +14,8 @@ import {
   getCurrentUser,
   isFollowing, toggleFollow,
 } from '../db/store';
-import { subscribeToComments, addComment, toggleLikePost, type FirestoreComment, deletePost } from '../db/firestore';
-import CategoryBadge from './CategoryBadge';
+import { subscribeToComments, addComment, toggleLikePost, type FirestoreComment, deletePost, subscribeToFollowingState } from '../db/firestore';
+import CategoryBadge, { CATEGORY_COLOR_MAP } from './CategoryBadge';
 
 interface PostCardProps {
   post: FirestorePost;
@@ -93,14 +93,24 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
     setSaved(isSaved(post.id || ''));
     setLikesCount(post.likesCount);
     setCommentsCount(post.commentsCount);
-    
+
     if (post.id) {
       const unsubscribe = subscribeToComments(post.id, (fetchedComments) => {
         setComments(fetchedComments);
+        setCommentsCount(fetchedComments.length);
       });
       return () => unsubscribe();
     }
   }, [post, myId]);
+
+  // Firestoreのフォロー状態をリアルタイム同期
+  useEffect(() => {
+    if (!myId || !post.userId || post.userId === myId) return;
+    const unsub = subscribeToFollowingState(myId, post.userId, (isFol) => {
+      setFollowing(isFol);
+    });
+    return () => unsub();
+  }, [myId, post.userId]);
 
   useEffect(() => {
     if (textRef.current) {
@@ -140,8 +150,10 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
 
   async function handleComment() {
     if (!commentInput.trim() || !post.id || !myId) return;
-    await addComment(post.id, myId, commentInput.trim());
+    const text = commentInput.trim();
     setCommentInput('');
+    setShowComments(true);
+    await addComment(post.id, myId, text);
     onToast?.('コメントを送信しました！', 'success');
     onUpdate();
   }
@@ -169,9 +181,13 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
               width: 40, height: 40, borderRadius: '50%',
               background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '1.25rem',
+              fontSize: '1.25rem', overflow: 'hidden', flexShrink: 0
             }}>
-              {author.avatar}
+              {author.avatar && (author.avatar.startsWith('http') || author.avatar.startsWith('data:') || author.avatar.startsWith('/')) ? (
+                <img src={author.avatar} alt={author.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                author.avatar || author.name?.substring(0, 1).toUpperCase() || 'U'
+              )}
             </span>
           </button>
 
@@ -184,9 +200,19 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                 {author.name}
               </button>
               {post.userId === myId && (
-                <span className="badge" style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)', border: '1px solid var(--color-primary-light)' }}>自分</span>
+                <span style={{
+                  background: 'var(--color-primary-glow)',
+                  color: 'var(--color-primary)',
+                  border: '1px solid var(--color-primary-light)',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  display: 'inline-block'
+                }}>自分</span>
               )}
-              {showFollowButton && post.userId !== myId && (
+              {/* フォローしていない場合のみ「+ フォロー」ボタンを表示 */}
+              {showFollowButton && post.userId !== myId && !following && (
                 <button
                   onClick={handleFollowClick}
                   style={{
@@ -196,15 +222,14 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                     fontWeight: 700,
                     fontFamily: 'inherit',
                     cursor: 'pointer',
+                    background: 'var(--color-primary)',
+                    color: 'white',
+                    border: 'none',
                     transition: 'all var(--transition-fast)',
-                    ...(following
-                      ? { background: 'transparent', color: 'var(--text-muted)', border: '1px solid var(--border-color)' }
-                      : { background: 'var(--color-primary)', color: 'white', border: 'none' }
-                    ),
                   }}
-                  aria-label={following ? 'フォロー中' : 'フォローする'}
+                  aria-label="フォローする"
                 >
-                  {following ? 'フォロー中' : '+ フォロー'}
+                  + フォロー
                 </button>
               )}
             </div>
@@ -295,42 +320,51 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
           </div>
         )}
 
-        {/* タグの色がついた「ひとつの大きなタグ風ブロック」 (内容のタグ ＋ 取り組み時間) */}
+        {/* タグブロック (大カテゴリ ＋ サブステップタグ ＋ 取り組み時間) */}
         {(() => {
-          const style = PASTEL_CATEGORY_STYLES[post.category] || PASTEL_CATEGORY_STYLES['その他'];
+          const theme = CATEGORY_COLOR_MAP[post.category] || CATEGORY_COLOR_MAP['その他'];
           return (
             <div style={{
-              background: style.bg,
-              border: `1.5px solid ${style.border}`,
-              borderRadius: 12,
+              background: '#FAFAFC',
+              border: '1px solid #F1F5F9',
+              borderRadius: 14,
               padding: '10px 14px',
               marginBottom: 12,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'space-between',
               gap: 10,
+              boxShadow: 'none',
             }}>
-              {/* 左側: カテゴリ ＋ 面接ステップタグ (内容のタグ) */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              {/* 左側: 大カテゴリバッジ ＋ 詳細サブタグ (極薄パステルカラー) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span style={{
-                  background: style.badgeBg,
-                  color: style.text,
+                  background: theme.bg,
+                  color: theme.text,
+                  border: `1px solid ${theme.border}`,
                   padding: '3px 10px',
-                  borderRadius: 6,
-                  fontSize: '0.78rem',
-                  fontWeight: 800,
+                  borderRadius: 20,
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  letterSpacing: '0.2px',
+                  boxShadow: 'none',
                 }}>
                   {post.category}
                 </span>
+
                 {post.tags && post.tags.length > 0 && (
                   <span style={{
-                    background: 'var(--bg-surface)',
-                    color: style.text,
+                    background: '#FFFFFF',
+                    color: 'var(--text-secondary)',
                     padding: '3px 10px',
-                    borderRadius: 6,
-                    fontSize: '0.78rem',
-                    fontWeight: 800,
-                    border: `1px solid ${style.border}`,
+                    borderRadius: 20,
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    border: '1px solid #E2E8F0',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4,
+                    boxShadow: 'none',
                   }}>
                     {post.tags[0]}
                   </span>
@@ -343,11 +377,11 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                   display: 'flex',
                   alignItems: 'center',
                   gap: 5,
-                  fontSize: '0.82rem',
-                  fontWeight: 800,
-                  color: style.text,
+                  fontSize: '0.78rem',
+                  fontWeight: 600,
+                  color: 'var(--text-secondary)',
                 }}>
-                  <Clock size={14} />
+                  <Clock size={13} />
                   <span>
                     {(() => {
                       const rounded = Math.ceil(post.studyMinutes);
@@ -359,7 +393,7 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
                   </span>
                 </div>
               ) : (
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, color: style.text, opacity: 0.8 }}>記録完了</span>
+                <span style={{ fontSize: '0.72rem', fontWeight: 500, color: 'var(--text-muted)' }}>記録完了</span>
               )}
             </div>
           );
@@ -419,8 +453,12 @@ export default function PostCard({ post, onUpdate, onProfileClick, showFollowBut
 
             {/* Comment Input */}
             <div style={{ display: 'flex', gap: 8, marginTop: 8, minWidth: 0 }}>
-              <span style={{ fontSize: '1rem', flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', borderRadius: '50%', color: 'white', fontWeight: 'bold' }}>
-                {currentUser?.displayName?.[0] || 'U'}
+              <span style={{ fontSize: '1rem', flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', borderRadius: '50%', color: 'white', fontWeight: 'bold', overflow: 'hidden' }}>
+                {currentUser?.photoURL ? (
+                  <img src={currentUser.photoURL} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  currentUser?.displayName?.[0] || 'U'
+                )}
               </span>
               <div style={{ flex: 1, minWidth: 0, display: 'flex', gap: 8 }}>
                 <input
@@ -455,10 +493,16 @@ function CommentItem({ comment }: { comment: FirestoreComment }) {
   if (loading) return <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>読み込み中...</div>;
   if (!profile) return null;
 
+  const isImageAvatar = profile.avatar && (profile.avatar.startsWith('http') || profile.avatar.startsWith('data:') || profile.avatar.startsWith('/'));
+
   return (
     <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
-      <span style={{ fontSize: '1rem', flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-surface-2)', borderRadius: '50%', border: '1px solid var(--border-color)', color: 'var(--text-primary)' }}>
-        {profile.name?.[0] || 'U'}
+      <span style={{ fontSize: '1rem', flexShrink: 0, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-surface-2)', borderRadius: '50%', border: '1px solid var(--border-color)', color: 'var(--text-primary)', overflow: 'hidden' }}>
+        {isImageAvatar ? (
+          <img src={profile.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : (
+          profile.name?.[0] || 'U'
+        )}
       </span>
       <div style={{ flex: 1, background: 'var(--bg-surface-2)', borderRadius: 12, padding: '8px 12px' }}>
         <span style={{ fontSize: '0.8rem', fontWeight: 600 }}>{profile.name}</span>

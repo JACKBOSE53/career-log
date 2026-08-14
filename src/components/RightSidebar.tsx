@@ -50,8 +50,12 @@ export default function RightSidebar({ onUpdate, onProfileClick }: RightSidebarP
                     onClick={() => onProfileClick(user.id)}
                     style={{ border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0 }}
                   >
-                    <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem' }}>
-                      {user.avatar}
+                    <span style={{ width: 36, height: 36, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1rem', overflow: 'hidden', flexShrink: 0 }}>
+                      {user.avatar && (user.avatar.startsWith('http') || user.avatar.startsWith('data:') || user.avatar.startsWith('/')) ? (
+                        <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        user.avatar || user.name?.[0] || 'U'
+                      )}
                     </span>
                   </button>
                   <div style={{ flex: 1, minWidth: 0 }}>
@@ -93,8 +97,12 @@ export default function RightSidebar({ onUpdate, onProfileClick }: RightSidebarP
                     cursor: 'pointer', textAlign: 'left', padding: '4px 0', fontFamily: 'inherit', width: '100%',
                   }}
                 >
-                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', flexShrink: 0 }}>
-                    {user.avatar}
+                  <span style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#1E40AF,#3B82F6)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.875rem', flexShrink: 0, overflow: 'hidden' }}>
+                    {user.avatar && (user.avatar.startsWith('http') || user.avatar.startsWith('data:') || user.avatar.startsWith('/')) ? (
+                      <img src={user.avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      user.avatar || user.name?.[0] || 'U'
+                    )}
                   </span>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: '0.8rem', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user.name}</div>

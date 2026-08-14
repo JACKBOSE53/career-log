@@ -207,9 +207,13 @@ export default function Sidebar({ currentPage, onNavigate, unreadCount, onCreate
           width: 36, height: 36, borderRadius: '50%',
           background: 'linear-gradient(135deg, #1E40AF, #3B82F6)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '1.1rem', flexShrink: 0,
+          fontSize: '1.1rem', flexShrink: 0, overflow: 'hidden',
         }}>
-          {me.avatar}
+          {me.avatar && (me.avatar.startsWith('http') || me.avatar.startsWith('data:') || me.avatar.startsWith('/')) ? (
+            <img src={me.avatar} alt={me.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          ) : (
+            me.avatar || me.name?.substring(0, 1).toUpperCase() || 'U'
+          )}
         </span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: '0.875rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

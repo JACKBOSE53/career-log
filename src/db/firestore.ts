@@ -901,15 +901,42 @@ export async function addComment(postId: string, userId: string, content: string
 }
 
 export function subscribeToComments(postId: string, callback: (comments: FirestoreComment[]) => void) {
-  const q = query(collection(db, `posts/${postId}/comments`), orderBy('createdAt', 'asc'));
-  return onSnapshot(q, (snapshot) => {
-    const comments = snapshot.docs.map(doc => ({
-      ...doc.data(),
-      id: doc.id,
-      createdAt: doc.data().createdAt?.toDate() || new Date(),
-    })) as FirestoreComment[];
-    callback(comments);
-  });
+  const colRef = collection(db, `posts/${postId}/comments`);
+  return onSnapshot(
+    colRef,
+    (snapshot) => {
+      const comments = snapshot.docs.map((docSnap) => {
+        const data = docSnap.data();
+        let createdAtDate = new Date();
+        if (data.createdAt && typeof data.createdAt.toDate === 'function') {
+          createdAtDate = data.createdAt.toDate();
+        } else if (data.createdAt instanceof Date) {
+          createdAtDate = data.createdAt;
+        }
+        return {
+          ...data,
+          id: docSnap.id,
+          createdAt: createdAtDate,
+        } as FirestoreComment;
+      });
+
+      const getTimeMs = (val: any) => {
+        if (!val) return 0;
+        if (val instanceof Date) return val.getTime();
+        if (typeof val.toDate === 'function') return val.toDate().getTime();
+        return 0;
+      };
+
+      // JS側で作成日時順（昇順）にソート
+      comments.sort((a, b) => getTimeMs(a.createdAt) - getTimeMs(b.createdAt));
+
+      callback(comments);
+    },
+    (err) => {
+      console.warn('Failed to subscribe comments:', err);
+      callback([]);
+    }
+  );
 }
 
 export async function deleteNotificationFirestore(userId: string, notifId: string) {

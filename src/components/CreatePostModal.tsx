@@ -200,12 +200,12 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
               <CategoryBadge category={category} />
             </div>
 
-            {/* 面接が選択された時のサブタグ選択パネル (選択されたステップはタグ保存され、文章には挿入されません) */}
+            {/* 面接が選択された時のサブタグ選択パネル */}
             {category === '面接' && (
-              <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 14, background: 'rgba(239, 68, 68, 0.12)', border: '1.5px solid #EF4444' }}>
-                <label style={{ fontSize: '0.82rem', fontWeight: 800, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <div style={{ marginBottom: 16, padding: '14px 16px', borderRadius: 14, background: '#FAFAFC', border: '1px solid #F1F5F9' }}>
+                <label style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
                   <span>🗣️</span>
-                  <span>面接のステップを選択（どの選考かタップして指定）</span>
+                  <span>面接のステップを選択（タップで選択）</span>
                 </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {INTERVIEW_SUB_TAGS.map((tag) => {
@@ -216,12 +216,13 @@ export default function CreatePostModal({ onClose, onPostCreated, defaultCategor
                         type="button"
                         onClick={() => setSelectedSubTag(tag)}
                         style={{
-                          padding: '6px 12px', borderRadius: 10,
-                          fontSize: '0.8rem', fontWeight: 800,
-                          background: isSelected ? '#EF4444' : 'var(--bg-surface)',
-                          color: isSelected ? 'white' : 'var(--text-primary)',
-                          border: `1.5px solid ${isSelected ? '#EF4444' : 'rgba(239, 68, 68, 0.4)'}`,
+                          padding: '5px 12px', borderRadius: 20,
+                          fontSize: '0.75rem', fontWeight: isSelected ? 600 : 400,
+                          background: isSelected ? '#FFF1F2' : '#FFFFFF',
+                          color: isSelected ? '#F43F5E' : 'var(--text-secondary)',
+                          border: `1px solid ${isSelected ? '#FFE4E6' : '#E2E8F0'}`,
                           cursor: 'pointer', transition: 'all 0.15s',
+                          boxShadow: 'none',
                         }}
                       >
                         {isSelected ? '✓ ' : ''}{tag}

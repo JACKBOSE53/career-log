@@ -299,24 +299,28 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
 
       <div style={{ padding: '0 16px 0' }}>
         {/* ── Avatar row ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -44, marginBottom: 14 }}>
-          {/* Avatar */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginTop: -54, marginBottom: 14 }}>
+          {/* Avatar (一番大きいサイズで表示) */}
           <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              width: 84, height: 84, borderRadius: '50%',
-              background: (editing && editForm.avatar)
-                ? undefined
-                : 'linear-gradient(135deg, #0F172A, #334155)',
-              backgroundImage: editing && editForm.avatar
-                ? `url(${editForm.avatar})`
-                : (!editing && user.avatar ? `url(${user.avatar})` : undefined),
-              backgroundSize: 'cover',
-              backgroundPosition: 'center',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: '2rem', fontWeight: 800, color: 'white',
-              border: '4px solid white',
-              boxShadow: '0 4px 16px rgba(0,0,0,0.15)',
-            }}>
+            <div
+              onClick={editing ? () => fileInputRef.current?.click() : undefined}
+              style={{
+                width: 104, height: 104, borderRadius: '50%',
+                background: (editing && editForm.avatar)
+                  ? undefined
+                  : 'linear-gradient(135deg, #0F172A, #334155)',
+                backgroundImage: editing && editForm.avatar
+                  ? `url(${editForm.avatar})`
+                  : (!editing && user.avatar ? `url(${user.avatar})` : undefined),
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '2.5rem', fontWeight: 800, color: 'white',
+                border: '4px solid var(--bg-surface, #ffffff)',
+                boxShadow: '0 6px 20px rgba(0,0,0,0.2)',
+                cursor: editing ? 'pointer' : 'default',
+              }}
+            >
               {!(editing ? editForm.avatar : user.avatar) && user.name.substring(0, 1).toUpperCase()}
             </div>
             {/* Upload image button */}
@@ -325,16 +329,16 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   style={{
-                    position: 'absolute', bottom: 0, right: -4,
-                    width: 28, height: 28, borderRadius: '50%',
+                    position: 'absolute', bottom: 2, right: 0,
+                    width: 32, height: 32, borderRadius: '50%',
                     background: 'var(--color-primary)', color: 'white',
                     border: '2px solid white', cursor: 'pointer',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
                   }}
                   title="アイコン画像を変更"
                 >
-                  <Camera size={14} />
+                  <Camera size={16} />
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleImageUpload} />
               </>
@@ -392,6 +396,40 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
               本人登録情報の編集
             </h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 0 16px' }}>
+              {/* 1. ニックネーム */}
+              {/* 0. アイコン設定 */}
+              <div>
+                <label style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-primary)', display: 'block', marginBottom: 6 }}>
+                  🖼️ アイコン写真・イラストの変更
+                </label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 8 }}>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    className="btn btn-secondary btn-sm"
+                    style={{ gap: 6, borderRadius: 99 }}
+                  >
+                    <Camera size={14} /> 写真ライブラリからアップロード
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  {['🎓', '💼', '🚀', '⚡', '🌟', '💻', '🎨', '🏆', '⚽', '🦊', '🐱', '🐶'].map((iconEmoji) => (
+                    <button
+                      key={iconEmoji}
+                      type="button"
+                      onClick={() => setEditForm((f) => ({ ...f, avatar: iconEmoji }))}
+                      style={{
+                        width: 38, height: 38, borderRadius: '50%', border: editForm.avatar === iconEmoji ? '2px solid var(--color-primary)' : '1px solid var(--border-color)',
+                        background: editForm.avatar === iconEmoji ? 'var(--color-primary-glow)' : 'var(--bg-surface-2)',
+                        fontSize: '1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s'
+                      }}
+                    >
+                      {iconEmoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* 1. ニックネーム */}
               <div>
                 <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', display: 'block', marginBottom: 4 }}>

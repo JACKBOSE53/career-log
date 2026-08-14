@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 type Tab = 'login' | 'signup';
@@ -16,6 +17,7 @@ export default function LoginPage() {
   const [signupPassword, setSignupPassword] = useState('');
   const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
 
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -47,10 +49,12 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      // プロフィール設定（ニックネーム等）は登録後に別画面で行うため、ここでは空文字を渡す
       await signup(signupEmail, signupPassword, "");
     } catch (err: unknown) {
-      setError(getErrorMessage((err as { code?: string }).code ?? ''));
+      const code = (err as { code?: string }).code ?? '';
+      const msg = (err as { message?: string }).message ?? '';
+      console.error('Signup error code:', code, 'message:', msg);
+      setError(getErrorMessage(code) + (code ? ` (${code})` : ''));
     }
     setLoading(false);
   }
@@ -152,10 +156,18 @@ export default function LoginPage() {
               </div>
               <div style={{ marginBottom: '24px' }}>
                 <label style={labelStyle}>パスワード</label>
-                <input type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
-                  placeholder="••••••••" required style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                  onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
+                <div style={{ position: 'relative' }}>
+                  <input type={showPassword ? 'text' : 'password'} value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)}
+                    placeholder="パスワードを入力" required style={{ ...inputStyle, paddingRight: 40 }}
+                    onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
+                    onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, display: 'flex'
+                  }}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
               {error && <ErrorBox message={error} />}
               <SubmitButton loading={loading} label="ログイン" />
@@ -175,26 +187,43 @@ export default function LoginPage() {
 
               <div style={fieldStyle}>
                 <label style={labelStyle}>パスワード <span style={{ color: '#64748B', fontWeight: 400 }}>（6文字以上）</span></label>
-                <input type="password" value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)}
-                  placeholder="••••••••" required style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                  onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
+                <div style={{ position: 'relative' }}>
+                  <input type={showPassword ? 'text' : 'password'} value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)}
+                    placeholder="6文字以上のパスワード" required style={{ ...inputStyle, paddingRight: 40 }}
+                    onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
+                    onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, display: 'flex'
+                  }}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div style={{ marginBottom: '24px' }}>
                 <label style={labelStyle}>パスワード（確認）</label>
-                <input type="password" value={signupPasswordConfirm} onChange={(e) => setSignupPasswordConfirm(e.target.value)}
-                  placeholder="••••••••" required style={{
-                    ...inputStyle,
-                    borderColor: signupPasswordConfirm && signupPassword !== signupPasswordConfirm
-                      ? '#EF4444' : '#E2E8F0',
-                  }}
-                  onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                  onBlur={(e) => {
-                    e.target.style.borderColor =
-                      signupPasswordConfirm && signupPassword !== signupPasswordConfirm
-                        ? '#EF4444' : '#E2E8F0';
-                  }} />
+                <div style={{ position: 'relative' }}>
+                  <input type={showPassword ? 'text' : 'password'} value={signupPasswordConfirm} onChange={(e) => setSignupPasswordConfirm(e.target.value)}
+                    placeholder="パスワードを再入力" required style={{
+                      ...inputStyle,
+                      paddingRight: 40,
+                      borderColor: signupPasswordConfirm && signupPassword !== signupPasswordConfirm
+                        ? '#EF4444' : '#E2E8F0',
+                    }}
+                    onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
+                    onBlur={(e) => {
+                      e.target.style.borderColor =
+                        signupPasswordConfirm && signupPassword !== signupPasswordConfirm
+                          ? '#EF4444' : '#E2E8F0';
+                    }} />
+                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, display: 'flex'
+                  }}>
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
                 {signupPasswordConfirm && signupPassword !== signupPasswordConfirm && (
                   <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '6px', marginBottom: 0 }}>
                     パスワードが一致していません

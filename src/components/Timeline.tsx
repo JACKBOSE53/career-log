@@ -17,7 +17,7 @@ type FeedTab = 'friends' | 'everyone';
 
 export default function Timeline({ onUpdate, onProfileClick, onToast }: TimelineProps) {
   const [feedTab, setFeedTab] = useState<FeedTab>('everyone');
-  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'followers' | 'private'>('all');
+
   const [posts, setPosts] = useState<FirestorePost[]>([]);
   const [showModal, setShowModal] = useState(false);
   const [showTimerModal, setShowTimerModal] = useState(false);
@@ -90,12 +90,7 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
       }
     }
 
-    if (!isTabAllowed) return false;
-
-    if (visibilityFilter === 'public') return post.visibility === 'public' || !post.visibility;
-    if (visibilityFilter === 'followers') return post.visibility === 'followers';
-    if (visibilityFilter === 'private') return post.visibility === 'private';
-    return true;
+    return isTabAllowed;
   });
 
   function handlePostCreated() {
@@ -198,65 +193,9 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
           </button>
         </div>
 
-        {/* 公開範囲サブフィルター (すべて / 全体公開 / 友達限定 / 個人) */}
-        <div style={{ display: 'flex', gap: 6, padding: '8px 12px', overflowX: 'auto', background: 'var(--bg-surface-2)', borderTop: '1px solid var(--border-color)' }}>
-          {[
-            { id: 'all', label: 'すべて' },
-            { id: 'public', label: '🌐 全体公開' },
-            { id: 'followers', label: '👥 友達' },
-            { id: 'private', label: '🔒 個人' },
-          ].map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setVisibilityFilter(f.id as any)}
-              style={{
-                padding: '4px 12px', borderRadius: 99,
-                border: `1px solid ${visibilityFilter === f.id ? 'var(--color-primary)' : 'var(--border-color)'}`,
-                background: visibilityFilter === f.id ? 'var(--color-primary)' : 'var(--bg-surface)',
-                color: visibilityFilter === f.id ? 'white' : 'var(--text-secondary)',
-                fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer',
-                whiteSpace: 'nowrap', transition: 'all 0.15s',
-              }}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
+
       </div>
 
-      {/* Feed label */}
-      {!loading && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          marginBottom: 12,
-          padding: '8px 14px',
-          background: feedTab === 'friends' ? '#F1F5F9' : '#F0FDF4',
-          borderRadius: 12,
-          border: `1px solid ${feedTab === 'friends' ? '#CBD5E1' : '#BBF7D0'}`,
-        }}>
-          {feedTab === 'friends' ? (
-            <>
-              <Users size={14} style={{ color: '#0F172A' }} />
-              <span style={{ fontSize: '0.8rem', color: '#1E293B', fontWeight: 600 }}>
-                フォロー中の人の投稿
-              </span>
-              <span style={{ fontSize: '0.75rem', color: '#64748B', marginLeft: 'auto' }}>
-                {posts.length}件
-              </span>
-            </>
-          ) : (
-            <>
-              <Globe size={14} style={{ color: '#16A34A' }} />
-              <span style={{ fontSize: '0.8rem', color: '#15803D', fontWeight: 600 }}>
-                全体公開の投稿
-              </span>
-              <span style={{ fontSize: '0.75rem', color: '#16A34A', marginLeft: 'auto' }}>
-                {posts.length}件
-              </span>
-            </>
-          )}
-        </div>
-      )}
 
       {/* Posts */}
       {loading ? (

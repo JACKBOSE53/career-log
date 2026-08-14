@@ -45,7 +45,6 @@ function timeAgo(dateVal: any): string {
 
 export default function NotificationSection({ onUpdate, onProfileClick }: NotificationSectionProps) {
   const [notifications, setNotifications] = useState<Notification[]>(getNotifications());
-  const [unread, setUnread] = useState(getUnreadCount());
   const [copied, setCopied] = useState(false);
   const { currentUser } = useAuth();
 
@@ -100,15 +99,14 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     return () => unsub();
   }, [currentUser]);
 
+  const totalUnread = firestoreNotifs.filter((n) => !n.read).length + followRequests.length;
+
   async function handleApprove(req: FirestoreFollowRequest) {
     if (!req.id) return;
     setProcessingIds((prev) => new Set(prev).add(req.id!));
     try {
       await approveFollowRequest(req.id, req.fromUid, req.toUid);
       onUpdate();
-      setTimeout(() => {
-        window.location.reload();
-      }, 350);
     } finally {
       setProcessingIds((prev) => { const next = new Set(prev); next.delete(req.id!); return next; });
     }
@@ -120,9 +118,6 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     try {
       await rejectFollowRequest(req.id);
       onUpdate();
-      setTimeout(() => {
-        window.location.reload();
-      }, 350);
     } finally {
       setProcessingIds((prev) => { const next = new Set(prev); next.delete(req.id!); return next; });
     }
@@ -135,27 +130,21 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     setFirestoreNotifs((prev) => prev.filter((n) => n.id !== notifId));
     setNotifications((prev) => prev.filter((n) => n.id !== notifId));
     onUpdate();
-    setTimeout(() => {
-      window.location.reload();
-    }, 350);
   }
 
   async function handleDeleteReminder(eventId: string) {
     await deleteCalendarEvent(eventId);
     setCalendarReminders((prev) => prev.filter((r) => r.id !== eventId));
     onUpdate();
-    setTimeout(() => {
-      window.location.reload();
-    }, 350);
   }
 
   function handleMarkAllRead() {
     markAllNotificationsRead();
     if (currentUser) {
       markAllNotificationsReadFirestore(currentUser.uid);
+      setFirestoreNotifs(prev => prev.map(n => ({ ...n, read: true })));
     }
     setNotifications(getNotifications());
-    setUnread(0);
     onUpdate();
   }
 
@@ -178,13 +167,13 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, paddingTop: 4 }}>
         <div>
           <h2 style={{ fontSize: '1.125rem', fontWeight: 800, marginBottom: 2 }}>お知らせ・通知</h2>
-          {unread > 0 && (
+          {totalUnread > 0 && (
             <p style={{ fontSize: '0.8rem', color: 'var(--color-primary)', fontWeight: 600 }}>
-              {unread}件の未読通知
+              {totalUnread}件の未読通知
             </p>
           )}
         </div>
-        {unread > 0 && (
+        {totalUnread > 0 && (
           <button
             onClick={handleMarkAllRead}
             className="btn btn-ghost btn-sm"
