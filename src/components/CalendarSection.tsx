@@ -295,31 +295,92 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     });
   }
 
-  // イベントピル専用の鮮やかな背景色マップ（白文字との高コントラスト）
-  const PILL_COLORS: Record<string, string> = {
-    ES: '#2563EB',
-    テスト: '#059669',
-    '1次面接': '#DC2626',
-    '2次面接': '#B91C1C',
-    '最終面接': '#991B1B',
-    'AI・動画面接': '#0891B2',
-    '面談・リクルーター': '#059669',
-    GD: '#DB2777',
-    説明会: '#D97706',
-    OB訪問: '#0D9488',
-    インターン: '#D97706',
-    その他: '#475569',
+  // ─── イベントピル専用の透明感あふれるグラスモーフィズム配色マップ ───
+  interface PillStyle {
+    bg: string;
+    border: string;
+    text: string;
+  }
+
+  const TRANSLUCENT_PILL_STYLES: Record<string, PillStyle> = {
+    ES: {
+      bg: 'rgba(59, 130, 246, 0.18)',
+      border: 'rgba(96, 165, 250, 0.42)',
+      text: '#93C5FD',
+    },
+    テスト: {
+      bg: 'rgba(16, 185, 129, 0.18)',
+      border: 'rgba(52, 211, 153, 0.42)',
+      text: '#6EE7B7',
+    },
+    '1次面接': {
+      bg: 'rgba(239, 68, 68, 0.18)',
+      border: 'rgba(248, 113, 113, 0.42)',
+      text: '#FCA5A5',
+    },
+    '2次面接': {
+      bg: 'rgba(225, 29, 72, 0.18)',
+      border: 'rgba(244, 63, 94, 0.42)',
+      text: '#FDA4AF',
+    },
+    '最終面接': {
+      bg: 'rgba(220, 38, 38, 0.24)',
+      border: 'rgba(239, 68, 68, 0.48)',
+      text: '#FECACA',
+    },
+    'AI・動画面接': {
+      bg: 'rgba(6, 182, 212, 0.18)',
+      border: 'rgba(34, 211, 238, 0.42)',
+      text: '#67E8F9',
+    },
+    '面談・リクルーター': {
+      bg: 'rgba(16, 185, 129, 0.18)',
+      border: 'rgba(52, 211, 153, 0.42)',
+      text: '#6EE7B7',
+    },
+    GD: {
+      bg: 'rgba(236, 72, 153, 0.18)',
+      border: 'rgba(244, 114, 182, 0.42)',
+      text: '#F9A8D4',
+    },
+    説明会: {
+      bg: 'rgba(245, 158, 11, 0.18)',
+      border: 'rgba(251, 191, 36, 0.42)',
+      text: '#FDE68A',
+    },
+    OB訪問: {
+      bg: 'rgba(20, 184, 166, 0.18)',
+      border: 'rgba(45, 212, 191, 0.42)',
+      text: '#5EEAD4',
+    },
+    インターン: {
+      bg: 'rgba(245, 158, 11, 0.22)',
+      border: 'rgba(251, 191, 36, 0.48)',
+      text: '#FDE68A',
+    },
+    その他: {
+      bg: 'rgba(148, 163, 184, 0.15)',
+      border: 'rgba(148, 163, 184, 0.35)',
+      text: '#CBD5E1',
+    },
   };
 
-  function getPillColor(ev: CountdownEvent): string {
-    if (PILL_COLORS[ev.category]) return PILL_COLORS[ev.category];
-    // 会社名やタイトルに基づく自動カラーバリエーション
+  function getPillStyle(ev: CountdownEvent): PillStyle {
+    if (TRANSLUCENT_PILL_STYLES[ev.category]) return TRANSLUCENT_PILL_STYLES[ev.category];
     const str = ev.company || ev.title;
-    if (str.includes('証券') || str.includes('銀行') || str.includes('金融')) return '#2563EB'; // ブルー
-    if (str.includes('不動産') || str.includes('商社')) return '#0F766E'; // ディープティール
-    if (str.includes('バイト') || str.includes('塾')) return '#991B1B'; // ワインレッド
-    if (str.includes('SPI') || str.includes('Webテスト')) return '#059669'; // エメラルド
-    return '#D97706'; // デフォルトアンバーゴールド
+    if (str.includes('証券') || str.includes('銀行') || str.includes('金融')) {
+      return { bg: 'rgba(59, 130, 246, 0.2)', border: 'rgba(96, 165, 250, 0.45)', text: '#93C5FD' };
+    }
+    if (str.includes('不動産') || str.includes('商社')) {
+      return { bg: 'rgba(20, 184, 166, 0.2)', border: 'rgba(45, 212, 191, 0.45)', text: '#5EEAD4' };
+    }
+    if (str.includes('バイト') || str.includes('塾')) {
+      return { bg: 'rgba(225, 29, 72, 0.2)', border: 'rgba(244, 63, 94, 0.45)', text: '#FDA4AF' };
+    }
+    if (str.includes('SPI') || str.includes('Webテスト')) {
+      return { bg: 'rgba(16, 185, 129, 0.2)', border: 'rgba(52, 211, 153, 0.45)', text: '#6EE7B7' };
+    }
+    return { bg: 'rgba(245, 158, 11, 0.2)', border: 'rgba(251, 191, 36, 0.45)', text: '#FDE68A' };
   }
 
   return (
@@ -479,7 +540,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                     zIndex: 2,
                   }}>
                     {cell.events.slice(0, 3).map((ev) => {
-                      const pillBg = getPillColor(ev);
+                      const style = getPillStyle(ev);
                       const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
                       const isStart = cell.dateStr === ev.targetDate;
                       const isEnd = cell.dateStr === (ev.endDate || ev.targetDate);
@@ -490,16 +551,20 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       const displayTitle = ev.company || ev.title;
 
                       if (isMulti) {
-                        // 連日イベント（帯で繋げる）
+                        // 連日イベント（透明感ある帯で繋げる）
                         const shouldShowText = isStart || isWeekStart || cell.day === 1;
 
                         return (
                           <div
                             key={ev.id}
                             style={{
-                              height: 18,
-                              background: pillBg,
-                              color: '#FFFFFF',
+                              height: 19,
+                              background: style.bg,
+                              color: style.text,
+                              borderTop: `1px solid ${style.border}`,
+                              borderBottom: `1px solid ${style.border}`,
+                              borderLeft: (isStart && isEnd) || isStart || isWeekStart ? `1px solid ${style.border}` : 'none',
+                              borderRight: (isStart && isEnd) || isEnd || isWeekEnd ? `1px solid ${style.border}` : 'none',
                               borderRadius: isStart && isEnd
                                 ? 4
                                 : isStart || isWeekStart
@@ -516,18 +581,19 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                                 : isEnd || isWeekEnd
                                 ? 'calc(100% + 3px)'
                                 : 'calc(100% + 6px)',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+                              backdropFilter: 'blur(4px)',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
                               position: 'relative',
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: '0.68rem',
+                              fontSize: '0.675rem',
                               fontWeight: 700,
                               padding: '0 2px',
                               overflow: 'hidden',
                               whiteSpace: 'nowrap',
                               textOverflow: 'ellipsis',
-                              lineHeight: '18px',
+                              lineHeight: '17px',
                             }}
                             title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
                           >
@@ -545,27 +611,29 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         );
                       }
 
-                      // 単日イベント（角丸ピルバー）
+                      // 単日イベント（透明感ある角丸ピルバー）
                       return (
                         <div
                           key={ev.id}
                           style={{
-                            height: 18,
+                            height: 19,
                             width: '100%',
-                            background: pillBg,
-                            color: '#FFFFFF',
+                            background: style.bg,
+                            color: style.text,
+                            border: `1px solid ${style.border}`,
                             borderRadius: 4,
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.2)',
+                            backdropFilter: 'blur(4px)',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.18)',
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '0.68rem',
+                            fontSize: '0.675rem',
                             fontWeight: 700,
                             padding: '0 2px',
                             overflow: 'hidden',
                             whiteSpace: 'nowrap',
                             textOverflow: 'ellipsis',
-                            lineHeight: '18px',
+                            lineHeight: '17px',
                           }}
                           title={`${ev.title} (${ev.category})`}
                         >
