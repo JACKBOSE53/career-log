@@ -457,7 +457,7 @@ export function subscribeToNotifications(
   const q = query(
     collection(db, `users/${userId}/notifications`),
     orderBy('createdAt', 'desc'),
-    limit(50)
+    limit(20)
   );
   return onSnapshot(q, (snap) => {
     const list = snap.docs.map((d) => ({
