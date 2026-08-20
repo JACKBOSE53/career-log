@@ -55,12 +55,7 @@ service cloud.firestore {
 
     // ─── posts コレクション ───────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isSignedIn() && (
-        resource.data.userId == request.auth.uid ||
-        resource.data.visibility == 'public' ||
-        (resource.data.visibility == 'followers' && isFollowerOf(resource.data.userId)) ||
-        resource.data.visibility == null
-      );
+      allow read: if isSignedIn();
 
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
