@@ -503,22 +503,27 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
               就活取り組み実績
             </h2>
-            <div style={{ display: 'flex', background: 'var(--bg-surface-2)', padding: 3, borderRadius: 8 }}>
-              {(['month', 'total'] as const).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setSummaryPeriod(p)}
-                  style={{
-                    border: 'none', padding: '4px 10px', borderRadius: 6,
-                    fontSize: '0.72rem', fontWeight: summaryPeriod === p ? 700 : 500,
-                    background: summaryPeriod === p ? 'white' : 'transparent',
-                    color: summaryPeriod === p ? 'var(--color-primary)' : 'var(--text-muted)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {p === 'month' ? '今月' : '累計'}
-                </button>
-              ))}
+            <div style={{ display: 'flex', background: 'var(--bg-surface-2)', padding: 3, borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
+              {(['month', 'total'] as const).map((p) => {
+                const isActive = summaryPeriod === p;
+                return (
+                  <button
+                    key={p}
+                    onClick={() => setSummaryPeriod(p)}
+                    style={{
+                      border: 'none', padding: '5px 12px', borderRadius: 8,
+                      fontSize: '0.75rem', fontWeight: isActive ? 800 : 500,
+                      background: isActive ? 'var(--bg-surface)' : 'transparent',
+                      color: isActive ? 'var(--color-primary)' : 'var(--text-muted)',
+                      cursor: 'pointer',
+                      boxShadow: isActive ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {p === 'month' ? '今月' : '累計'}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -582,7 +587,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             </div>
           </div>
 
-          {/* サマリー数値 (タップで対象の期間・グラフへ動的切り替え) */}
+          {/* サマリー数値 (洗練されたグラデーション＆高コントラストカード) */}
           <div style={{
             display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10,
             marginBottom: 22, textAlign: 'center',
@@ -591,19 +596,41 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             <div
               onClick={() => setPeriodFilter('week')}
               style={{
-                background: periodFilter === 'week' ? 'var(--color-primary-glow)' : 'var(--bg-surface-2)',
-                padding: '12px 6px', borderRadius: 14,
-                border: `1.5px solid ${periodFilter === 'week' ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                background: periodFilter === 'week'
+                  ? 'linear-gradient(135deg, rgba(59, 130, 246, 0.16) 0%, rgba(37, 99, 235, 0.06) 100%)'
+                  : 'rgba(255, 255, 255, 0.03)',
+                padding: '12px 6px 14px', borderRadius: 14,
+                border: `1.5px solid ${periodFilter === 'week' ? '#3B82F6' : 'rgba(255, 255, 255, 0.08)'}`,
+                boxShadow: periodFilter === 'week' ? '0 4px 16px rgba(59, 130, 246, 0.22)' : 'none',
                 cursor: 'pointer', transition: 'all 0.2s ease',
                 userSelect: 'none',
               }}
               title="タップして直近7日間の日別グラフを表示"
             >
-              <div style={{ fontSize: '0.68rem', color: periodFilter === 'week' ? 'var(--color-primary)' : 'var(--text-muted)', fontWeight: 700, marginBottom: 3 }}>
-                今日 {periodFilter === 'week' ? '(週表示中)' : ''}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.7rem', fontWeight: 800,
+                color: periodFilter === 'week' ? '#60A5FA' : 'var(--text-muted)',
+                marginBottom: 6,
+                background: periodFilter === 'week' ? 'rgba(59, 130, 246, 0.15)' : 'transparent',
+                padding: '2px 8px', borderRadius: 99,
+              }}>
+                今日
               </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-                {formatHoursMins(todayMins)}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline' }}>
+                {todayMins <= 0 ? (
+                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                    0<span style={{ fontSize: '0.72rem', fontWeight: 600, marginLeft: 2 }}>分</span>
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: '1.25rem', fontWeight: 900,
+                    color: periodFilter === 'week' ? '#60A5FA' : 'var(--text-primary)',
+                    letterSpacing: '-0.02em',
+                  }}>
+                    {formatHoursMins(todayMins)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -611,19 +638,41 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             <div
               onClick={() => setPeriodFilter('month')}
               style={{
-                background: periodFilter === 'month' ? 'var(--color-primary-glow)' : 'var(--bg-surface-2)',
-                padding: '12px 6px', borderRadius: 14,
-                border: `1.5px solid ${periodFilter === 'month' ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                background: periodFilter === 'month'
+                  ? 'linear-gradient(135deg, rgba(16, 185, 129, 0.16) 0%, rgba(5, 150, 105, 0.06) 100%)'
+                  : 'rgba(255, 255, 255, 0.03)',
+                padding: '12px 6px 14px', borderRadius: 14,
+                border: `1.5px solid ${periodFilter === 'month' ? '#10B981' : 'rgba(255, 255, 255, 0.08)'}`,
+                boxShadow: periodFilter === 'month' ? '0 4px 16px rgba(16, 185, 129, 0.22)' : 'none',
                 cursor: 'pointer', transition: 'all 0.2s ease',
                 userSelect: 'none',
               }}
               title="タップして今月の週別グラフを表示"
             >
-              <div style={{ fontSize: '0.68rem', color: periodFilter === 'month' ? 'var(--color-primary)' : 'var(--text-muted)', fontWeight: 700, marginBottom: 3 }}>
-                今月 {periodFilter === 'month' ? '(月表示中)' : ''}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.7rem', fontWeight: 800,
+                color: periodFilter === 'month' ? '#34D399' : 'var(--text-muted)',
+                marginBottom: 6,
+                background: periodFilter === 'month' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
+                padding: '2px 8px', borderRadius: 99,
+              }}>
+                今月の累計
               </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-primary)' }}>
-                {formatHoursMins(monthMins)}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline' }}>
+                {monthMins <= 0 ? (
+                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                    0<span style={{ fontSize: '0.72rem', fontWeight: 600, marginLeft: 2 }}>分</span>
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: '1.25rem', fontWeight: 900,
+                    color: periodFilter === 'month' ? '#34D399' : '#10B981',
+                    letterSpacing: '-0.02em',
+                  }}>
+                    {formatHoursMins(monthMins)}
+                  </span>
+                )}
               </div>
             </div>
 
@@ -631,19 +680,41 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
             <div
               onClick={() => setPeriodFilter('total')}
               style={{
-                background: periodFilter === 'total' ? 'var(--color-primary-glow)' : 'var(--bg-surface-2)',
-                padding: '12px 6px', borderRadius: 14,
-                border: `1.5px solid ${periodFilter === 'total' ? 'var(--color-primary)' : 'var(--border-color)'}`,
+                background: periodFilter === 'total'
+                  ? 'linear-gradient(135deg, rgba(249, 115, 22, 0.16) 0%, rgba(234, 88, 12, 0.06) 100%)'
+                  : 'rgba(255, 255, 255, 0.03)',
+                padding: '12px 6px 14px', borderRadius: 14,
+                border: `1.5px solid ${periodFilter === 'total' ? '#F97316' : 'rgba(255, 255, 255, 0.08)'}`,
+                boxShadow: periodFilter === 'total' ? '0 4px 16px rgba(249, 115, 22, 0.22)' : 'none',
                 cursor: 'pointer', transition: 'all 0.2s ease',
                 userSelect: 'none',
               }}
               title="タップして全期間の月別グラフを表示"
             >
-              <div style={{ fontSize: '0.68rem', color: periodFilter === 'total' ? 'var(--color-primary)' : 'var(--text-muted)', fontWeight: 700, marginBottom: 3 }}>
-                全累計 {periodFilter === 'total' ? '(累計表示中)' : ''}
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: '0.7rem', fontWeight: 800,
+                color: periodFilter === 'total' ? '#FB923C' : 'var(--text-muted)',
+                marginBottom: 6,
+                background: periodFilter === 'total' ? 'rgba(249, 115, 22, 0.15)' : 'transparent',
+                padding: '2px 8px', borderRadius: 99,
+              }}>
+                全期間の累計
               </div>
-              <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#F8FAFC' }}>
-                {formatHoursMins(totalMins)}
+              <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'baseline' }}>
+                {totalMins <= 0 ? (
+                  <span style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                    0<span style={{ fontSize: '0.72rem', fontWeight: 600, marginLeft: 2 }}>分</span>
+                  </span>
+                ) : (
+                  <span style={{
+                    fontSize: '1.25rem', fontWeight: 900,
+                    color: periodFilter === 'total' ? '#FB923C' : '#F97316',
+                    letterSpacing: '-0.02em',
+                  }}>
+                    {formatHoursMins(totalMins)}
+                  </span>
+                )}
               </div>
             </div>
           </div>
