@@ -564,15 +564,15 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             ))}
           </div>
 
-          {/* カレンダーグリッド（フルグリッド） */}
+          {/* カレンダーグリッド（スリム＆シャープな境界線のフルグリッド） */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
             gap: '1px',
-            background: 'var(--border-color)',
-            borderRadius: 10,
+            background: 'rgba(255, 255, 255, 0.08)',
+            borderRadius: 12,
             overflow: 'hidden',
-            border: '1px solid var(--border-color)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
           }}>
             {calendarCells.map((cell) => {
               const isSunday = cell.dayOfWeek === 0;
@@ -583,66 +583,70 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   key={cell.dateStr}
                   onClick={() => setSelectedDateStr(cell.dateStr)}
                   style={{
-                    minHeight: 88,
-                    padding: '5px 2px',
+                    minHeight: 56,
+                    padding: '3px 2px 2px',
                     display: 'flex',
                     flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'flex-start',
                     cursor: 'pointer',
-                    transition: 'background 0.15s ease',
-                    background: 'var(--bg-surface)',
+                    transition: 'all 0.15s ease',
+                    background: cell.isSelected
+                      ? (cell.isCurrentMonth
+                        ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(37, 99, 235, 0.1) 100%)'
+                        : 'rgba(56, 189, 248, 0.12)')
+                      : (cell.isCurrentMonth
+                        ? 'rgba(255, 255, 255, 0.03)'
+                        : 'rgba(0, 0, 0, 0.28)'),
+                    boxShadow: cell.isSelected ? 'inset 0 0 0 1.5px #38BDF8' : 'none',
                     position: 'relative',
-                    outline: cell.isSelected ? '2px solid var(--color-primary)' : 'none',
-                    outlineOffset: '-2px',
                     zIndex: cell.isSelected ? 5 : 1,
                   }}
                 >
                   {/* 日付数字 */}
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 2 }}>
                     {cell.isToday ? (
                       <span style={{
-                        width: 22,
-                        height: 22,
+                        width: 18,
+                        height: 18,
                         borderRadius: '50%',
                         background: '#2563EB',
                         color: '#FFFFFF',
                         display: 'inline-flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        fontSize: '0.75rem',
+                        fontSize: '0.7rem',
                         fontWeight: 800,
                       }}>
                         {cell.day}
                       </span>
                     ) : (
                       <span style={{
-                        fontSize: '0.78rem',
+                        fontSize: '0.74rem',
                         fontWeight: cell.isSelected ? 800 : 600,
                         color: !cell.isCurrentMonth
-                          ? '#94A3B8'
+                          ? 'rgba(255, 255, 255, 0.22)'
                           : isSunday
                           ? '#EF4444'
                           : isSaturday
-                          ? '#2563EB'
+                          ? '#38BDF8'
                           : 'var(--text-primary)',
-                        opacity: !cell.isCurrentMonth ? 0.6 : 1,
                       }}>
                         {cell.day}
                       </span>
                     )}
                   </div>
 
-                  {/* ── イベントバー（連日帯 ＆ 単日ピル） ── */}
+                  {/* ── イベントバー（スリムな連日帯 ＆ 単日ピル） ── */}
                   <div style={{
                     width: '100%',
                     display: 'flex',
                     flexDirection: 'column',
-                    gap: 3,
+                    gap: 2,
                     overflow: 'visible',
                     zIndex: 2,
                   }}>
-                    {cell.events.slice(0, 3).map((ev) => {
+                    {cell.events.slice(0, 2).map((ev) => {
                       const style = getPillStyle(ev);
                       const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
                       const isStart = cell.dateStr === ev.targetDate;
@@ -654,14 +658,14 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       const displayTitle = (ev.completed ? '✔ ' : '') + (ev.company || ev.title);
 
                       if (isMulti) {
-                        // 連日イベント（透明感ある帯で繋げる・黒ずみ影なし）
+                        // 連日イベント
                         const shouldShowText = isStart || isWeekStart || cell.day === 1;
 
                         return (
                           <div
                             key={ev.id}
                             style={{
-                              height: 19,
+                              height: 15,
                               background: style.bg,
                               color: style.text,
                               borderTop: `1px solid ${style.border}`,
@@ -669,11 +673,11 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                               borderLeft: (isStart && isEnd) || isStart || isWeekStart ? `1px solid ${style.border}` : 'none',
                               borderRight: (isStart && isEnd) || isEnd || isWeekEnd ? `1px solid ${style.border}` : 'none',
                               borderRadius: isStart && isEnd
-                                ? 4
+                                ? 3
                                 : isStart || isWeekStart
-                                ? '4px 0 0 4px'
+                                ? '3px 0 0 3px'
                                 : isEnd || isWeekEnd
-                                ? '0 4px 4px 0'
+                                ? '0 3px 3px 0'
                                 : 0,
                               marginLeft: isStart || isWeekStart ? 0 : -3,
                               marginRight: isEnd || isWeekEnd ? 0 : -3,
@@ -688,13 +692,13 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                               display: 'flex',
                               alignItems: 'center',
                               justifyContent: 'center',
-                              fontSize: '0.675rem',
+                              fontSize: '0.62rem',
                               fontWeight: 700,
                               padding: '0 2px',
                               overflow: 'hidden',
                               whiteSpace: 'nowrap',
                               textOverflow: 'ellipsis',
-                              lineHeight: '17px',
+                              lineHeight: '13px',
                             }}
                             title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
                           >
@@ -712,27 +716,27 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                         );
                       }
 
-                      // 単日イベント（透明感ある角丸ピルバー・黒ずみ影なし）
+                      // 単日イベント
                       return (
                         <div
                           key={ev.id}
                           style={{
-                            height: 19,
+                            height: 15,
                             width: '100%',
                             background: style.bg,
                             color: style.text,
                             border: `1px solid ${style.border}`,
-                            borderRadius: 4,
+                            borderRadius: 3,
                             display: 'flex',
                             alignItems: 'center',
                             justifyContent: 'center',
-                            fontSize: '0.675rem',
+                            fontSize: '0.62rem',
                             fontWeight: 700,
                             padding: '0 2px',
                             overflow: 'hidden',
                             whiteSpace: 'nowrap',
                             textOverflow: 'ellipsis',
-                            lineHeight: '17px',
+                            lineHeight: '13px',
                           }}
                           title={`${ev.title} (${ev.category})`}
                         >
@@ -749,15 +753,16 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       );
                     })}
 
-                    {cell.events.length > 3 && (
+                    {cell.events.length > 2 && (
                       <div style={{
-                        fontSize: '0.6rem',
-                        fontWeight: 700,
-                        color: 'var(--text-muted)',
+                        fontSize: '0.58rem',
+                        fontWeight: 800,
+                        color: 'var(--color-primary, #38BDF8)',
                         textAlign: 'center',
                         lineHeight: 1,
+                        marginTop: 1,
                       }}>
-                        +{cell.events.length - 3}
+                        +{cell.events.length - 2}
                       </div>
                     )}
                   </div>
