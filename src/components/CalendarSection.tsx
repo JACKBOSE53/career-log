@@ -403,6 +403,112 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     });
   }
 
+  // ─── 週ごとのイベントスロット（段位置）計算 ───
+  // 複数日にまたがる予定が同じ段（スロット）で横にまっすぐ繋がるように段位置を固定
+  interface CellSlotItem {
+    event: CountdownEvent;
+    isStart: boolean;
+    isEnd: boolean;
+    isMulti: boolean;
+    isWeekStart: boolean;
+    isWeekEnd: boolean;
+  }
+
+  interface ProcessedCell extends CalendarGridCell {
+    slots: (CellSlotItem | null)[];
+    overflowCount: number;
+  }
+
+  const processedCells: ProcessedCell[] = [];
+  const MAX_SLOTS = 2;
+
+  // 7日（1週間）ごとにスロット計算
+  for (let w = 0; w < calendarCells.length; w += 7) {
+    const weekCells = calendarCells.slice(w, w + 7);
+
+    // この週に一部でも被っている全イベントを収集
+    const weekEventsMap = new Map<string, CountdownEvent>();
+    weekCells.forEach(cell => {
+      cell.events.forEach(ev => weekEventsMap.set(ev.id, ev));
+    });
+    const weekEvents = Array.from(weekEventsMap.values());
+
+    // 複数日イベントを最優先 ＆ 期間が長い順・開始が早い順でソート
+    weekEvents.sort((a, b) => {
+      const aMulti = (a.endDate || a.targetDate) !== a.targetDate;
+      const bMulti = (b.endDate || b.targetDate) !== b.targetDate;
+      if (aMulti && !bMulti) return -1;
+      if (!aMulti && bMulti) return 1;
+      if (a.targetDate !== b.targetDate) return a.targetDate.localeCompare(b.targetDate);
+      const aEnd = a.endDate || a.targetDate;
+      const bEnd = b.endDate || b.targetDate;
+      return bEnd.localeCompare(aEnd);
+    });
+
+    // 7日分 × MAX_SLOTS のマトリクス
+    const weekGridSlots: (CellSlotItem | null)[][] = Array.from({ length: 7 }, () => []);
+    const dayOverflowCount: number[] = Array(7).fill(0);
+
+    // イベントごとに空いているスロット番号を探して配置
+    weekEvents.forEach(ev => {
+      const evStart = ev.targetDate;
+      const evEnd = ev.endDate || ev.targetDate;
+      const isMulti = evEnd !== evStart;
+
+      // この週内で該当する日のインデックス (0〜6)
+      const dayIndices: number[] = [];
+      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
+        const dStr = weekCells[dayIdx].dateStr;
+        if (evStart <= dStr && dStr <= evEnd) {
+          dayIndices.push(dayIdx);
+        }
+      }
+
+      if (dayIndices.length === 0) return;
+
+      // 該当するすべての日で空いている最も低いスロット番号を見つける
+      let assignedSlot = -1;
+      for (let s = 0; s < MAX_SLOTS; s++) {
+        const isSlotFreeAllDays = dayIndices.every(dIdx => !weekGridSlots[dIdx][s]);
+        if (isSlotFreeAllDays) {
+          assignedSlot = s;
+          break;
+        }
+      }
+
+      if (assignedSlot !== -1) {
+        dayIndices.forEach(dIdx => {
+          const dStr = weekCells[dIdx].dateStr;
+          while (weekGridSlots[dIdx].length < assignedSlot) {
+            weekGridSlots[dIdx].push(null);
+          }
+          weekGridSlots[dIdx][assignedSlot] = {
+            event: ev,
+            isStart: dStr === evStart,
+            isEnd: dStr === evEnd,
+            isMulti,
+            isWeekStart: dIdx === 0,
+            isWeekEnd: dIdx === 6,
+          };
+        });
+      } else {
+        // スロット上限を超えた場合はオーバーフローカウント
+        dayIndices.forEach(dIdx => {
+          dayOverflowCount[dIdx]++;
+        });
+      }
+    });
+
+    // processedCells へ追加
+    weekCells.forEach((cell, dIdx) => {
+      processedCells.push({
+        ...cell,
+        slots: weekGridSlots[dIdx],
+        overflowCount: dayOverflowCount[dIdx],
+      });
+    });
+  }
+
   // ─── イベントピル専用の透明感あふれるクリーンなパレット（黒ずみゼロ・高コントラスト） ───
   interface PillStyle {
     bg: string;
@@ -564,7 +670,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             ))}
           </div>
 
-          {/* カレンダーグリッド（スリム＆シャープな境界線のフルグリッド） */}
+          {/* カレンダーグリッド（スロット固定＆極細高コントラストバー） */}
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(7, 1fr)',
@@ -574,7 +680,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             overflow: 'hidden',
             border: '1px solid rgba(255, 255, 255, 0.1)',
           }}>
-            {calendarCells.map((cell) => {
+            {processedCells.map((cell) => {
               const isSunday = cell.dayOfWeek === 0;
               const isSaturday = cell.dayOfWeek === 6;
 
@@ -637,7 +743,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                     )}
                   </div>
 
-                  {/* ── イベントバー（スリムな連日帯 ＆ 単日ピル） ── */}
+                  {/* ── イベントバー（段固定・横一連で水平に繋がるスリムバー） ── */}
                   <div style={{
                     width: '100%',
                     display: 'flex',
@@ -646,33 +752,31 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                     overflow: 'visible',
                     zIndex: 2,
                   }}>
-                    {cell.events.slice(0, 2).map((ev) => {
-                      const style = getPillStyle(ev);
-                      const isMulti = Boolean(ev.endDate && ev.endDate !== ev.targetDate);
-                      const isStart = cell.dateStr === ev.targetDate;
-                      const isEnd = cell.dateStr === (ev.endDate || ev.targetDate);
-                      const isWeekStart = cell.dayOfWeek === 0;
-                      const isWeekEnd = cell.dayOfWeek === 6;
+                    {cell.slots.map((slotItem, slotIndex) => {
+                      if (!slotItem) {
+                        // 空きスロット（下の段の予定位置を揃えるための透明スペーサー）
+                        return <div key={`spacer-${slotIndex}`} style={{ height: 13, width: '100%' }} />;
+                      }
 
-                      // タイトルの短縮表示（会社名またはタイトル、完了時はチェック付き）
+                      const { event: ev, isStart, isEnd, isMulti, isWeekStart, isWeekEnd } = slotItem;
+                      const style = getPillStyle(ev);
+                      const shouldShowText = isStart || isWeekStart || cell.day === 1;
                       const displayTitle = (ev.completed ? '✔ ' : '') + (ev.company || ev.title);
 
                       if (isMulti) {
-                        // 連日イベント
-                        const shouldShowText = isStart || isWeekStart || cell.day === 1;
-
+                        // 連日イベント（水平にまっすぐ繋がるリボンバー）
                         return (
                           <div
-                            key={ev.id}
+                            key={`${ev.id}-${slotIndex}`}
                             style={{
-                              height: 15,
+                              height: 13,
                               background: style.bg,
                               color: style.text,
                               borderTop: `1px solid ${style.border}`,
                               borderBottom: `1px solid ${style.border}`,
                               borderLeft: (isStart && isEnd) || isStart || isWeekStart ? `1px solid ${style.border}` : 'none',
                               borderRight: (isStart && isEnd) || isEnd || isWeekEnd ? `1px solid ${style.border}` : 'none',
-                              borderRadius: isStart && isEnd
+                              borderRadius: (isStart && isEnd)
                                 ? 3
                                 : isStart || isWeekStart
                                 ? '3px 0 0 3px'
@@ -681,7 +785,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                                 : 0,
                               marginLeft: isStart || isWeekStart ? 0 : -3,
                               marginRight: isEnd || isWeekEnd ? 0 : -3,
-                              width: isStart && isEnd
+                              width: (isStart && isEnd)
                                 ? '100%'
                                 : isStart || isWeekStart
                                 ? 'calc(100% + 3px)'
@@ -693,12 +797,12 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                               alignItems: 'center',
                               justifyContent: 'center',
                               fontSize: '0.62rem',
-                              fontWeight: 700,
+                              fontWeight: 800,
                               padding: '0 2px',
                               overflow: 'hidden',
                               whiteSpace: 'nowrap',
                               textOverflow: 'ellipsis',
-                              lineHeight: '13px',
+                              lineHeight: '12px',
                             }}
                             title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
                           >
@@ -719,9 +823,9 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       // 単日イベント
                       return (
                         <div
-                          key={ev.id}
+                          key={`${ev.id}-${slotIndex}`}
                           style={{
-                            height: 15,
+                            height: 13,
                             width: '100%',
                             background: style.bg,
                             color: style.text,
@@ -731,12 +835,12 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                             alignItems: 'center',
                             justifyContent: 'center',
                             fontSize: '0.62rem',
-                            fontWeight: 700,
+                            fontWeight: 800,
                             padding: '0 2px',
                             overflow: 'hidden',
                             whiteSpace: 'nowrap',
                             textOverflow: 'ellipsis',
-                            lineHeight: '13px',
+                            lineHeight: '12px',
                           }}
                           title={`${ev.title} (${ev.category})`}
                         >
@@ -753,16 +857,16 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                       );
                     })}
 
-                    {cell.events.length > 2 && (
+                    {cell.overflowCount > 0 && (
                       <div style={{
-                        fontSize: '0.58rem',
+                        fontSize: '0.55rem',
                         fontWeight: 800,
                         color: 'var(--color-primary, #38BDF8)',
                         textAlign: 'center',
                         lineHeight: 1,
                         marginTop: 1,
                       }}>
-                        +{cell.events.length - 2}
+                        +{cell.overflowCount}
                       </div>
                     )}
                   </div>
