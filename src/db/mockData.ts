@@ -131,6 +131,10 @@ export interface CountdownEvent {
   time?: string;      // 例: '14:00' (開始時間)
   endTime?: string;   // 例: '15:30' (終了時間)
   location?: string; // 例: 'オンライン (Zoom)' / 'テストセンター新宿'
+  url?: string;       // Web面接URLやマイページURL
+  isAllDay?: boolean; // 終日フラグ
+  alarm?: string;     // 通知アラーム設定
+  step?: string;      // 選考ステップ詳細
   priority?: 'high' | 'medium' | 'low'; // 第一志望群 / 第二志望群 / 練習
   completed?: boolean; // 完了マーク
 }

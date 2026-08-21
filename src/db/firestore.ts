@@ -975,7 +975,11 @@ export interface FirestoreCalendarEvent {
   category: string;
   priority?: 'high' | 'medium' | 'low';
   location?: string;
+  url?: string;
   memo?: string;
+  isAllDay?: boolean;
+  alarm?: string;
+  step?: string;
   completed?: boolean; // 完了マーク
   createdAt: Timestamp | Date;
 }
