@@ -558,11 +558,11 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                 就活取り組み推移
               </h2>
               <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                {periodFilter === 'week' ? `記録開始から ${chartData.length} 日目の取り組み時間` : periodFilter === 'month' ? '今月の総時間の推移' : 'これまでの全期間累計'}
+                {periodFilter === 'week' ? `直近 ${chartData.length} 日間の日別取り組み時間` : periodFilter === 'month' ? '週ごとの取り組み時間推移' : '月ごとの取り組み時間推移'}
               </p>
             </div>
 
-            {/* 期間切り替え (洗練されたスレートカプセルボタン) */}
+            {/* 期間切り替え (日・週・月 ボタン) */}
             <div style={{ display: 'flex', background: 'var(--bg-surface-2)', padding: 3, borderRadius: 10, border: '1px solid rgba(255,255,255,0.08)' }}>
               {(['week', 'month', 'total'] as const).map((p) => {
                 const isActive = periodFilter === p;
@@ -580,7 +580,7 @@ export default function ReportSection({ onUpdate, onNavigateTimeline, onNavigate
                       cursor: 'pointer', transition: 'all 0.15s ease',
                     }}
                   >
-                    {p === 'week' ? '週' : p === 'month' ? '月' : '累計'}
+                    {p === 'week' ? '日' : p === 'month' ? '週' : '月'}
                   </button>
                 );
               })}
