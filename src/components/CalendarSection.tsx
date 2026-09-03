@@ -790,6 +790,89 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 })}
               </div>
             </div>
+
+            {/* 3. 直近の選考・締切 */}
+            <div className="card" style={{
+              padding: 16, borderRadius: 18,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                  <span style={{
+                    width: 22, height: 22, borderRadius: 6,
+                    background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.78rem',
+                  }}>
+                    🔥
+                  </span>
+                  直近の選考・締切
+                </h3>
+                <span style={{
+                  fontSize: '0.72rem', fontWeight: 700,
+                  padding: '2px 8px', borderRadius: 99,
+                  background: 'var(--bg-surface-2)', color: 'var(--text-muted)',
+                  border: '1px solid var(--border-color)',
+                }}>
+                  {upcomingDeadlines.length} 件
+                </span>
+              </div>
+
+              {upcomingDeadlines.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '16px 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                  直近の選考予定はありません
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {upcomingDeadlines.map((ev) => {
+                    const style = getCategoryStyle(ev.category);
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
+                    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={() => handleSelectMiniDate(ev.targetDate)}
+                        style={{
+                          padding: '10px 12px', borderRadius: 12,
+                          background: 'var(--bg-surface-2)',
+                          border: '1px solid var(--border-color)',
+                          borderLeft: `4px solid ${style.accent}`,
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            fontSize: '0.82rem', fontWeight: 800, color: 'var(--text-primary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {ev.company || ev.title}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            {ev.step || ev.category} ({ev.targetDate.slice(5).replace('-', '/')})
+                          </div>
+                        </div>
+
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 99,
+                          fontSize: '0.7rem', fontWeight: 800,
+                          background: diffDays === 0 ? 'rgba(220, 38, 38, 0.15)' : 'rgba(37, 99, 235, 0.12)',
+                          color: diffDays === 0 ? '#DC2626' : '#2563EB',
+                          whiteSpace: 'nowrap', marginLeft: 6,
+                        }}>
+                          {diffDays === 0 ? '本日!' : `あと${diffDays}日`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* ══════════════════════════════════════════════════════
@@ -1446,95 +1529,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
               )}
             </div>
           </div>
-        </div>
-
-        {/* ── 一番下: 直近の選考・締切 ── */}
-        <div className="card" style={{
-          marginTop: 18,
-          padding: 18,
-          borderRadius: 18,
-          border: '1px solid var(--border-color)',
-          background: 'var(--bg-surface)',
-          boxShadow: 'var(--shadow-sm)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 8, margin: 0 }}>
-              <span style={{
-                width: 26, height: 26, borderRadius: 8,
-                background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444',
-                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '0.85rem',
-              }}>
-                🔥
-              </span>
-              直近の選考・締切
-            </h3>
-            <span style={{
-              fontSize: '0.75rem', fontWeight: 700,
-              padding: '2px 8px', borderRadius: 99,
-              background: 'var(--bg-surface-2)', color: 'var(--text-muted)',
-              border: '1px solid var(--border-color)',
-            }}>
-              {upcomingDeadlines.length} 件
-            </span>
-          </div>
-
-          {upcomingDeadlines.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              直近の選考予定はありません
-            </div>
-          ) : (
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-              gap: 12,
-            }}>
-              {upcomingDeadlines.map((ev) => {
-                const style = getCategoryStyle(ev.category);
-                const today = new Date(); today.setHours(0, 0, 0, 0);
-                const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
-                const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-                return (
-                  <div
-                    key={ev.id}
-                    onClick={() => handleSelectMiniDate(ev.targetDate)}
-                    style={{
-                      padding: '12px 14px', borderRadius: 14,
-                      background: 'var(--bg-surface-2)',
-                      border: '1px solid var(--border-color)',
-                      borderLeft: `4px solid ${style.accent}`,
-                      cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{
-                        fontSize: '0.85rem', fontWeight: 800, color: 'var(--text-primary)',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                      }}>
-                        {ev.company || ev.title}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: 2 }}>
-                        {ev.step || ev.category} ({ev.targetDate.slice(5).replace('-', '/')})
-                      </div>
-                    </div>
-
-                    <span style={{
-                      padding: '3px 10px', borderRadius: 99,
-                      fontSize: '0.72rem', fontWeight: 800,
-                      background: diffDays === 0 ? 'rgba(220, 38, 38, 0.15)' : 'rgba(37, 99, 235, 0.12)',
-                      color: diffDays === 0 ? '#DC2626' : '#2563EB',
-                      whiteSpace: 'nowrap', marginLeft: 8,
-                    }}>
-                      {diffDays === 0 ? '本日!' : `あと${diffDays}日`}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
