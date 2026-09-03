@@ -53,11 +53,25 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
       return;
     }
     const cleanQ = q.trim();
+    const cleanQLower = cleanQ.toLowerCase();
     const firestoreUsers = await searchUsersFirestore(cleanQ);
-    const matchedPosts = allPosts.filter(
-      (p) => p.category !== '面接' && (p.title.includes(cleanQ) || p.content.includes(cleanQ))
-    );
-    
+    const matchedPosts = allPosts.filter((p) => {
+      if (p.category === '面接') return false;
+      const catMatch = p.category && p.category.toLowerCase().includes(cleanQLower);
+      const tagMatch = p.tags && p.tags.some((t) => t.toLowerCase().includes(cleanQLower));
+      const companyMatch = p.company && p.company.toLowerCase().includes(cleanQLower);
+      const titleMatch = p.title && p.title.toLowerCase().includes(cleanQLower);
+      const contentMatch = p.content && p.content.toLowerCase().includes(cleanQLower);
+      return Boolean(catMatch || tagMatch || companyMatch || titleMatch || contentMatch);
+    });
+
+    // ユーザー検索で見つかり、投稿がない場合は自動でユーザータブをアクティブにする
+    if (firestoreUsers.length > 0 && matchedPosts.length === 0) {
+      setTab('users');
+    } else if (matchedPosts.length > 0) {
+      setTab('posts');
+    }
+
     setResults({
       posts: matchedPosts,
       users: firestoreUsers,
