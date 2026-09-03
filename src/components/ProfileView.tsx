@@ -19,6 +19,7 @@ import {
 } from '../db/firestore';
 import PostCard from './PostCard';
 import ReportSection from './ReportSection';
+import LegalModal from './LegalModal';
 
 export const INDUSTRY_OPTIONS = [
   'メーカー', '商社', 'IT・Web・通信', 'コンサル・シンクタンク',
@@ -43,6 +44,9 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
   const isMe = !userId || userId === currentUser?.uid || userId === 'user-me';
   const effectiveTargetUid = isMe ? (currentUser?.uid || userId || 'user-me') : userId;
+
+  // 規約・ポリシーモーダル
+  const [legalModalType, setLegalModalType] = useState<'terms' | 'privacy' | null>(null);
 
   // プロフィール下部タブ (レポート / 投稿一覧)
   const [profileTab, setProfileTab] = useState<'report' | 'posts'>('report');
@@ -732,6 +736,35 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
         )}
         </>
         )}
+
+        {/* 利用規約・プライバシーポリシーリンク */}
+        <div style={{
+          marginTop: 40,
+          paddingTop: 16,
+          borderTop: '1px solid var(--border-color)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 16,
+          fontSize: '0.75rem',
+          color: 'var(--text-muted)',
+        }}>
+          <button
+            type="button"
+            onClick={() => setLegalModalType('terms')}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            利用規約
+          </button>
+          <span>•</span>
+          <button
+            type="button"
+            onClick={() => setLegalModalType('privacy')}
+            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', textDecoration: 'underline' }}
+          >
+            プライバシーポリシー
+          </button>
+        </div>
       </div>
 
       {/* ── プロフィールをシェア / アカウント交換モーダル ── */}
@@ -943,6 +976,11 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
             </div>
           </div>
         </div>
+      )}
+
+      {/* 利用規約 / プライバシーポリシーモーダル */}
+      {legalModalType && (
+        <LegalModal type={legalModalType} onClose={() => setLegalModalType(null)} />
       )}
     </div>
   );
