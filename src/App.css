@@ -2,7 +2,7 @@
 .app-layout {
   display: flex;
   min-height: 100vh;
-  max-width: 1280px;
+  max-width: 1480px;
   margin: 0 auto;
   background: var(--bg-base);
   border-left: 1px solid rgba(255, 255, 255, 0.08);
@@ -27,7 +27,8 @@
 }
 
 .content-inner-wide {
-  max-width: 1160px;
+  max-width: 100%;
+  padding: 0 12px 80px;
 }
 
 /* Desktop — no bottom padding needed */
