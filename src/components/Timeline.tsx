@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Plus, RefreshCw, Users, Globe, Timer } from 'lucide-react';
 import { subscribeToTimelinePosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
 import { isFollowing } from '../db/store';
 import { useAuth } from '../contexts/AuthContext';
 import PostCard from './PostCard';
-import CreatePostModal from './CreatePostModal';
-import StudyTimerModal from './StudyTimerModal';
+
+const CreatePostModal = lazy(() => import('./CreatePostModal'));
+const StudyTimerModal = lazy(() => import('./StudyTimerModal'));
 
 interface TimelineProps {
   onUpdate: () => void;
@@ -265,21 +266,23 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
         ))
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <CreatePostModal
-          onClose={() => setShowModal(false)}
-          onPostCreated={handlePostCreated}
-        />
-      )}
+      {/* Modal with Suspense */}
+      <Suspense fallback={null}>
+        {showModal && (
+          <CreatePostModal
+            onClose={() => setShowModal(false)}
+            onPostCreated={handlePostCreated}
+          />
+        )}
 
-      {/* Timer Modal */}
-      {showTimerModal && (
-        <StudyTimerModal
-          onClose={() => setShowTimerModal(false)}
-          onPostCreated={handlePostCreated}
-        />
-      )}
+        {/* Timer Modal */}
+        {showTimerModal && (
+          <StudyTimerModal
+            onClose={() => setShowTimerModal(false)}
+            onPostCreated={handlePostCreated}
+          />
+        )}
+      </Suspense>
     </div>
   );
 }

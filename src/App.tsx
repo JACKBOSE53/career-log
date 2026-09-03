@@ -1,21 +1,34 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, lazy, Suspense } from 'react';
 import './App.css';
 import Sidebar, { BottomNav } from './components/Sidebar';
 import type { Page } from './components/Sidebar';
 import Timeline from './components/Timeline';
 
-import CalendarSection from './components/CalendarSection';
-import SearchSection from './components/SearchSection';
-import NotificationSection from './components/NotificationSection';
-import ProfileView from './components/ProfileView';
-import CreatePostModal from './components/CreatePostModal';
-import StudyTimerModal from './components/StudyTimerModal';
+const CalendarSection = lazy(() => import('./components/CalendarSection'));
+const SearchSection = lazy(() => import('./components/SearchSection'));
+const NotificationSection = lazy(() => import('./components/NotificationSection'));
+const ProfileView = lazy(() => import('./components/ProfileView'));
+const CreatePostModal = lazy(() => import('./components/CreatePostModal'));
+const StudyTimerModal = lazy(() => import('./components/StudyTimerModal'));
+const LoginPage = lazy(() => import('./pages/LoginPage'));
+const OnboardingPage = lazy(() => import('./pages/OnboardingPage'));
+
 import { subscribeToNotifications, subscribeToFollowRequests } from './db/firestore';
 import { useAuth } from './contexts/AuthContext';
-import LoginPage from './pages/LoginPage';
-import OnboardingPage from './pages/OnboardingPage';
 
 import ToastNotification, { type ToastState } from './components/ToastNotification';
+
+function PageFallback() {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+      minHeight: '30vh', gap: 12, color: 'var(--text-muted)',
+    }}>
+      <div className="spinner" style={{ width: 28, height: 28 }} />
+      <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>読み込み中...</span>
+    </div>
+  );
+}
 
 export default function App() {
   const { currentUser, profile, loading, logout } = useAuth();
@@ -98,10 +111,22 @@ export default function App() {
   }
 
   // ── 未ログイン ────────────────────────────────────────────────
-  if (!currentUser) return <LoginPage />;
+  if (!currentUser) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <LoginPage />
+      </Suspense>
+    );
+  }
 
   // ── プロフィール未設定（オンボーディング） ──────────────────
-  if (!currentUser.displayName || !profile) return <OnboardingPage />;
+  if (!currentUser.displayName || !profile) {
+    return (
+      <Suspense fallback={<PageFallback />}>
+        <OnboardingPage />
+      </Suspense>
+    );
+  }
 
   function handleNavigate(page: Page) {
     setCurrentPage(page);
@@ -136,46 +161,46 @@ export default function App() {
       {/* Main Content */}
       <main className="main-content">
         <div className={`content-inner ${currentPage === 'calendar' ? 'content-inner-wide' : ''}`}>
-          {/* Page views */}
-          {currentPage === 'home' && (
-            <Timeline
-              onUpdate={handleUpdate}
-              onProfileClick={handleProfileClick}
-              onToast={triggerToast}
-            />
-          )}
+          <Suspense fallback={<PageFallback />}>
+            {/* Page views */}
+            {currentPage === 'home' && (
+              <Timeline
+                onUpdate={handleUpdate}
+                onProfileClick={handleProfileClick}
+                onToast={triggerToast}
+              />
+            )}
 
-          {currentPage === 'calendar' && (
-            <CalendarSection onUpdate={handleUpdate} onToast={triggerToast} />
-          )}
+            {currentPage === 'calendar' && (
+              <CalendarSection onUpdate={handleUpdate} onToast={triggerToast} />
+            )}
 
-          {currentPage === 'search' && (
-            <SearchSection
-              onUpdate={handleUpdate}
-              onProfileClick={handleProfileClick}
-            />
-          )}
+            {currentPage === 'search' && (
+              <SearchSection
+                onUpdate={handleUpdate}
+                onProfileClick={handleProfileClick}
+              />
+            )}
 
+            {currentPage === 'notifications' && (
+              <NotificationSection
+                onUpdate={handleUpdate}
+                onProfileClick={handleProfileClick}
+              />
+            )}
 
-          {currentPage === 'notifications' && (
-            <NotificationSection
-              onUpdate={handleUpdate}
-              onProfileClick={handleProfileClick}
-            />
-          )}
-
-          {currentPage === 'profile' && (
-            <ProfileView
-              key={profileUserId ?? currentUser.uid}
-              userId={profileUserId ?? currentUser.uid}
-              onClose={profileUserId ? () => { setProfileUserId(null); setCurrentPage('home'); } : undefined}
-              onUpdate={handleUpdate}
-              onToast={triggerToast}
-            />
-          )}
+            {currentPage === 'profile' && (
+              <ProfileView
+                key={profileUserId ?? currentUser.uid}
+                userId={profileUserId ?? currentUser.uid}
+                onClose={profileUserId ? () => { setProfileUserId(null); setCurrentPage('home'); } : undefined}
+                onUpdate={handleUpdate}
+                onToast={triggerToast}
+              />
+            )}
+          </Suspense>
         </div>
       </main>
-
 
       {/* Mobile Bottom Nav */}
       {isMobile && (
@@ -186,23 +211,26 @@ export default function App() {
         />
       )}
 
-      {/* Global Create Post Modal */}
-      {showCreateModal && (
-        <CreatePostModal
-          onClose={() => setShowCreateModal(false)}
-          onPostCreated={handlePostCreated}
-          onToast={triggerToast}
-        />
-      )}
+      {/* Modals with Suspense */}
+      <Suspense fallback={null}>
+        {/* Global Create Post Modal */}
+        {showCreateModal && (
+          <CreatePostModal
+            onClose={() => setShowCreateModal(false)}
+            onPostCreated={handlePostCreated}
+            onToast={triggerToast}
+          />
+        )}
 
-      {/* Global Study Timer Modal */}
-      {showTimerModal && (
-        <StudyTimerModal
-          onClose={() => setShowTimerModal(false)}
-          onPostCreated={handlePostCreated}
-          onToast={triggerToast}
-        />
-      )}
+        {/* Global Study Timer Modal */}
+        {showTimerModal && (
+          <StudyTimerModal
+            onClose={() => setShowTimerModal(false)}
+            onPostCreated={handlePostCreated}
+            onToast={triggerToast}
+          />
+        )}
+      </Suspense>
 
       {/* Global Top Toast Notification Bar */}
       <ToastNotification
