@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Search, X, UserPlus, UserCheck } from 'lucide-react';
-import { CATEGORIES, INTERVIEW_SUB_TAGS } from '../db/mockData';
+import { CATEGORIES } from '../db/mockData';
 import {
   searchUsersFirestore,
   sendFollowRequest,
@@ -55,7 +55,7 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
     const cleanQ = q.trim();
     const firestoreUsers = await searchUsersFirestore(cleanQ);
     const matchedPosts = allPosts.filter(
-      (p) => p.title.includes(cleanQ) || p.content.includes(cleanQ)
+      (p) => p.category !== '面接' && (p.title.includes(cleanQ) || p.content.includes(cleanQ))
     );
     
     setResults({
@@ -79,7 +79,7 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
           <input
             id="search-input"
             className="input"
-            placeholder="企業名、1次面接、最終面接、SPI、テスト、キーワードで検索..."
+            placeholder="企業名、ES、SPI、テスト、キーワードで検索..."
             value={query}
             onChange={(e) => handleSearch(e.target.value)}
             style={{ paddingLeft: 40, paddingRight: 40, borderRadius: 'var(--border-radius-full)' }}
@@ -103,7 +103,7 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
           <div>
             <h3 style={{ fontSize: '0.9rem', fontWeight: 800, marginBottom: 12, color: 'var(--text-primary)' }}>取り組みカテゴリから探す</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              {CATEGORIES.map((cat) => (
+              {CATEGORIES.filter((cat) => cat.id !== '面接').map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => handleSearch(cat.id)}
@@ -114,31 +114,6 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
                   }}
                 >
                   <CategoryBadge category={cat.id} />
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* 面接ステップから探す */}
-          <div>
-            <h3 style={{ fontSize: '0.9rem', fontWeight: 800, marginBottom: 12, color: '#EF4444', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>🗣️</span>
-              <span>面接ステップから探す</span>
-            </h3>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {INTERVIEW_SUB_TAGS.map((tag) => (
-                <button
-                  key={tag}
-                  onClick={() => handleSearch(tag)}
-                  style={{
-                    padding: '8px 14px', borderRadius: 10,
-                    fontSize: '0.8125rem', fontWeight: 800,
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)',
-                    cursor: 'pointer', transition: 'all 0.15s',
-                  }}
-                >
-                  🔍 {tag}
                 </button>
               ))}
             </div>
