@@ -135,7 +135,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className="main-content">
-        <div className="content-inner">
+        <div className={`content-inner ${currentPage === 'calendar' ? 'content-inner-wide' : ''}`}>
           {/* Page views */}
           {currentPage === 'home' && (
             <Timeline

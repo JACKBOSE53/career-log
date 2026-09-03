@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon,
-  Clock, Trash2, Edit3, X, AlertCircle, CheckCircle2, Check, MapPin, Bell, MoreVertical,
+  Clock, Trash2, Edit3, X, AlertCircle, CheckCircle2, Check, MapPin, Bell,
   Link as LinkIcon, FileText, ChevronRight as ChevronRightIcon,
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,15 +11,9 @@ import {
   addCalendarEvent,
   updateCalendarEvent,
   deleteCalendarEvent,
-  formatFirestoreDateLocal,
-  getPostDateStr,
   type FirestorePost,
-  type FirestoreCalendarEvent,
 } from '../db/firestore';
 import { type CountdownEvent } from '../db/mockData';
-import CategoryBadge from './CategoryBadge';
-import VerticalTimePicker from './VerticalTimePicker';
-
 import { getLocalDateStr } from '../utils/dateUtils';
 
 interface CalendarSectionProps {
@@ -28,12 +22,12 @@ interface CalendarSectionProps {
 }
 
 export const CALENDAR_CATEGORIES = [
-  { id: '面接', label: '面接', color: '#EF4444', dotColor: '#EF4444', bg: '#FFF5F5', border: '#FFE4E6' },
-  { id: 'ES', label: 'ES', color: '#2563EB', dotColor: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
-  { id: 'テスト', label: 'テスト', color: '#8B5CF6', dotColor: '#8B5CF6', bg: '#FAF5FF', border: '#F3E8FF' },
-  { id: 'GD', label: 'GD', color: '#EC4899', dotColor: '#EC4899', bg: '#FFF5F9', border: '#FCE7F3' },
-  { id: 'インターン', label: 'インターン', color: '#F97316', dotColor: '#F97316', bg: '#FFF9F5', border: '#FFEDD5' },
-  { id: 'その他', label: 'その他', color: '#64748B', dotColor: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' },
+  { id: '面接', label: '面接', color: '#EF4444', accent: '#DC2626', dotColor: '#EF4444', bg: '#FFF5F5', border: '#FFE4E6' },
+  { id: 'ES', label: 'ES', color: '#2563EB', accent: '#1D4ED8', dotColor: '#2563EB', bg: '#EFF6FF', border: '#BFDBFE' },
+  { id: 'テスト', label: 'テスト', color: '#8B5CF6', accent: '#7C3AED', dotColor: '#8B5CF6', bg: '#FAF5FF', border: '#F3E8FF' },
+  { id: 'GD', label: 'GD', color: '#EC4899', accent: '#DB2777', dotColor: '#EC4899', bg: '#FFF5F9', border: '#FCE7F3' },
+  { id: 'インターン', label: 'インターン', color: '#F97316', accent: '#EA580C', dotColor: '#F97316', bg: '#FFF9F5', border: '#FFEDD5' },
+  { id: 'その他', label: 'その他', color: '#64748B', accent: '#475569', dotColor: '#64748B', bg: '#F8FAFC', border: '#E2E8F0' },
 ];
 
 export const STEP_OPTIONS: Record<string, string[]> = {
@@ -45,24 +39,72 @@ export const STEP_OPTIONS: Record<string, string[]> = {
   その他: [],
 };
 
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
-  ES: { bg: '#F4F6FF', text: '#4F46E5', border: '#E0E7FF' },
-  テスト: { bg: '#FAF5FF', text: '#9333EA', border: '#F3E8FF' },
-  '1次面接': { bg: '#FFF5F5', text: '#E11D48', border: '#FFE4E6' },
-  '2次面接': { bg: '#FFF1F2', text: '#BE123C', border: '#FECDD3' },
-  '3次〜面接': { bg: '#FFE4E6', text: '#9F1239', border: '#FDA4AF' },
-  '最終面接': { bg: '#FFE4E6', text: '#9F1239', border: '#FDA4AF' },
-  '動画面接': { bg: '#ECFEFF', text: '#0891B2', border: '#CFFAFE' },
-  'AI面接': { bg: '#ECFEFF', text: '#0891B2', border: '#CFFAFE' },
-  '面談・リクルーター': { bg: '#F0FDF4', text: '#16A34A', border: '#DCFCE7' },
-  面接: { bg: '#FFF5F5', text: '#EF4444', border: '#FFE4E6' },
-  GD: { bg: '#FFF5F9', text: '#DB2777', border: '#FCE7F3' },
-  インターン: { bg: '#FFF9F5', text: '#EA580C', border: '#FFEDD5' },
-  その他: { bg: '#F8FAFC', text: '#64748B', border: '#E2E8F0' },
+const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; accent: string }> = {
+  ES: { bg: '#EFF6FF', text: '#1D4ED8', border: '#BFDBFE', accent: '#2563EB' },
+  テスト: { bg: '#FAF5FF', text: '#7C3AED', border: '#F3E8FF', accent: '#8B5CF6' },
+  '1次面接': { bg: '#FFF5F5', text: '#E11D48', border: '#FFE4E6', accent: '#EF4444' },
+  '2次面接': { bg: '#FFF1F2', text: '#BE123C', border: '#FECDD3', accent: '#E11D48' },
+  '3次〜面接': { bg: '#FFE4E6', text: '#9F1239', border: '#FDA4AF', accent: '#BE123C' },
+  '最終面接': { bg: '#FFE4E6', text: '#9F1239', border: '#FDA4AF', accent: '#DC2626' },
+  '動画面接': { bg: '#ECFEFF', text: '#0891B2', border: '#CFFAFE', accent: '#06B6D4' },
+  'AI面接': { bg: '#ECFEFF', text: '#0891B2', border: '#CFFAFE', accent: '#06B6D4' },
+  '面談・リクルーター': { bg: '#F0FDF4', text: '#16A34A', border: '#DCFCE7', accent: '#22C55E' },
+  面接: { bg: '#FFF5F5', text: '#DC2626', border: '#FFE4E6', accent: '#EF4444' },
+  GD: { bg: '#FFF5F9', text: '#DB2777', border: '#FCE7F3', accent: '#EC4899' },
+  インターン: { bg: '#FFF9F5', text: '#EA580C', border: '#FFEDD5', accent: '#F97316' },
+  その他: { bg: '#F8FAFC', text: '#475569', border: '#E2E8F0', accent: '#64748B' },
 };
 
 function getCategoryStyle(cat: string) {
   return CATEGORY_COLORS[cat] || CATEGORY_COLORS['その他'];
+}
+
+function parseTimeToMinutes(timeStr?: string, defaultMinutes = 540): number {
+  if (!timeStr) return defaultMinutes;
+  const parts = timeStr.split(':');
+  if (parts.length < 2) return defaultMinutes;
+  const h = parseInt(parts[0], 10);
+  const m = parseInt(parts[1], 10);
+  if (isNaN(h) || isNaN(m)) return defaultMinutes;
+  return h * 60 + m;
+}
+
+function getMondayOfWeek(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  const monday = new Date(date.setDate(diff));
+  monday.setHours(0, 0, 0, 0);
+  return monday;
+}
+
+function getWeekDays(monday: Date): Date[] {
+  const days: Date[] = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    days.push(d);
+  }
+  return days;
+}
+
+function getWeekNumber(d: Date): number {
+  const target = new Date(d.valueOf());
+  const dayNr = (d.getDay() + 6) % 7;
+  target.setDate(target.getDate() - dayNr + 3);
+  const firstThursday = target.valueOf();
+  target.setMonth(0, 1);
+  if (target.getDay() !== 4) {
+    target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+  }
+  return 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000);
+}
+
+function formatDateToYMD(d: Date): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatJapaneseDate(dateStr: string): string {
@@ -73,37 +115,60 @@ function formatJapaneseDate(dateStr: string): string {
   return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日(${dayNames[d.getDay()]})`;
 }
 
+const HOUR_SLOT_HEIGHT = 64; // 1時間 = 64px
+const START_HOUR = 8;        // 08:00
+const END_HOUR = 22;         // 22:00
+const TOTAL_HOURS = END_HOUR - START_HOUR;
+
 export default function CalendarSection({ onUpdate, onToast }: CalendarSectionProps) {
-  const [currentDate, setCurrentDate] = useState(() => new Date());
-  const [selectedDateStr, setSelectedDateStr] = useState(() => getLocalDateStr());
-  const [countdowns, setCountdowns] = useState<CountdownEvent[]>([]);
   const { currentUser } = useAuth();
+
+  // ── View Mode & Date States ───────────────────────────────
+  const [viewMode, setViewMode] = useState<'week' | 'month'>('week');
+  const [selectedDateStr, setSelectedDateStr] = useState<string>(() => getLocalDateStr());
+  const [currentWeekMonday, setCurrentWeekMonday] = useState<Date>(() => getMondayOfWeek(new Date()));
+  const [miniMonthDate, setMiniMonthDate] = useState<Date>(() => new Date());
+  const [currentTime, setCurrentTime] = useState<Date>(() => new Date());
+
+  // ── Filter State ──────────────────────────────────────────
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(
+    () => new Set(CALENDAR_CATEGORIES.map(c => c.id))
+  );
+
+  // ── Data State ────────────────────────────────────────────
+  const [countdowns, setCountdowns] = useState<CountdownEvent[]>([]);
   const [myPosts, setMyPosts] = useState<FirestorePost[]>([]);
-  const [openMenuEventId, setOpenMenuEventId] = useState<string | null>(null);
 
-  // 外側クリックでメニューを閉じる
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (openMenuEventId && !(e.target as HTMLElement).closest('.event-menu-container')) {
-        setOpenMenuEventId(null);
-      }
-    }
-    window.addEventListener('click', handleClickOutside);
-    return () => window.removeEventListener('click', handleClickOutside);
-  }, [openMenuEventId]);
+  // ── Modal State ───────────────────────────────────────────
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
 
-  // 1分ごとに日付変更をチェックして自動で今日に更新
+  // Form Fields
+  const [newCategory, setNewCategory] = useState<string>('面接');
+  const [newCompany, setNewCompany] = useState('');
+  const [newStep, setNewStep] = useState('1次面接');
+  const [newOtherStep, setNewOtherStep] = useState('');
+  const [isAllDay, setIsAllDay] = useState(false);
+  const [newDate, setNewDate] = useState(() => getLocalDateStr());
+  const [newTime, setNewTime] = useState('10:00');
+  const [newEndDate, setNewEndDate] = useState(() => getLocalDateStr());
+  const [newEndTime, setNewEndTime] = useState('11:30');
+  const [newAlarm, setNewAlarm] = useState('none');
+  const [newLocation, setNewLocation] = useState('');
+  const [newUrl, setNewUrl] = useState('');
+  const [newMemo, setNewMemo] = useState('');
+  const [newPriority, setNewPriority] = useState<'high' | 'medium' | 'low'>('high');
+
+  // タイマー: 1分ごとに現在時刻を更新
   useEffect(() => {
     const timer = setInterval(() => {
-      const today = getLocalDateStr();
-      if (today !== selectedDateStr) {
-        setSelectedDateStr(today);
-        setCurrentDate(new Date());
-      }
+      setCurrentTime(new Date());
     }, 60000);
     return () => clearInterval(timer);
-  }, [selectedDateStr]);
+  }, []);
 
+  // Firestore購読
   useEffect(() => {
     if (!currentUser) return;
     const unsubPosts = subscribeToUserPosts(currentUser.uid, currentUser.uid, true, (posts) => {
@@ -129,6 +194,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       }));
       setCountdowns(mapped);
     });
+
     const handleAutoUpdate = () => {
       onUpdate();
     };
@@ -145,66 +211,215 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     onUpdate();
   }, []);
 
-  // Modal State
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
-  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+  // ── フィルタリングされたイベント ──────────────────────────
+  const filteredEvents = useMemo(() => {
+    return countdowns.filter(e => selectedCategories.has(e.category));
+  }, [countdowns, selectedCategories]);
 
-  // Form Fields
-  const [newCategory, setNewCategory] = useState<string>('面接');
-  const [newCompany, setNewCompany] = useState('');
-  const [newStep, setNewStep] = useState('1次面接');
-  const [newOtherStep, setNewOtherStep] = useState('');
-  const [isAllDay, setIsAllDay] = useState(false);
-  const [newDate, setNewDate] = useState(() => getLocalDateStr());
-  const [newTime, setNewTime] = useState('14:00');
-  const [newEndDate, setNewEndDate] = useState(() => getLocalDateStr());
-  const [newEndTime, setNewEndTime] = useState('15:00');
-  const [newAlarm, setNewAlarm] = useState('none');
-  const [newLocation, setNewLocation] = useState('');
-  const [newUrl, setNewUrl] = useState('');
-  const [newMemo, setNewMemo] = useState('');
+  // ── カテゴリ集計 (時間・件数) ─────────────────────────────
+  const categoryStats = useMemo(() => {
+    return CALENDAR_CATEGORIES.map(cat => {
+      const catEvents = countdowns.filter(e => e.category === cat.id);
+      let totalMinutes = 0;
+      catEvents.forEach(e => {
+        if (!e.isAllDay && e.time && e.endTime) {
+          const start = parseTimeToMinutes(e.time);
+          const end = parseTimeToMinutes(e.endTime);
+          if (end > start) totalMinutes += (end - start);
+        } else {
+          totalMinutes += 60;
+        }
+      });
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      const timeStr = minutes === 0 ? `${hours}h00` : `${hours}h${String(minutes).padStart(2, '0')}`;
+      return {
+        ...cat,
+        count: catEvents.length,
+        timeStr,
+      };
+    });
+  }, [countdowns]);
 
-  const year = currentDate.getFullYear();
-  const month = currentDate.getMonth(); // 0-indexed
+  // ── 週間グリッド用の日付計算 ──────────────────────────────
+  const weekDays = useMemo(() => getWeekDays(currentWeekMonday), [currentWeekMonday]);
+  const weekNumber = useMemo(() => getWeekNumber(currentWeekMonday), [currentWeekMonday]);
+  const weekRangeStr = useMemo(() => {
+    const sun = weekDays[6];
+    const isSameYear = currentWeekMonday.getFullYear() === sun.getFullYear();
+    const isSameMonth = currentWeekMonday.getMonth() === sun.getMonth();
+    if (isSameMonth) {
+      return `${currentWeekMonday.getFullYear()}年${currentWeekMonday.getMonth() + 1}月${currentWeekMonday.getDate()}日 - ${sun.getDate()}日`;
+    }
+    if (isSameYear) {
+      return `${currentWeekMonday.getFullYear()}年${currentWeekMonday.getMonth() + 1}月${currentWeekMonday.getDate()}日 - ${sun.getMonth() + 1}月${sun.getDate()}日`;
+    }
+    return `${currentWeekMonday.getFullYear()}年${currentWeekMonday.getMonth() + 1}月${currentWeekMonday.getDate()}日 - ${sun.getFullYear()}年${sun.getMonth() + 1}月${sun.getDate()}日`;
+  }, [currentWeekMonday, weekDays]);
 
-  const dayNames = ['日', '月', '火', '水', '木', '金', '土'];
-
-  function prevMonth() {
-    setCurrentDate(new Date(year, month - 1, 1));
+  // ── 週の切り替えナビゲーション ─────────────────────────────
+  function prevWeek() {
+    const newMon = new Date(currentWeekMonday);
+    newMon.setDate(newMon.getDate() - 7);
+    setCurrentWeekMonday(newMon);
   }
 
-  function nextMonth() {
-    setCurrentDate(new Date(year, month + 1, 1));
+  function nextWeek() {
+    const newMon = new Date(currentWeekMonday);
+    newMon.setDate(newMon.getDate() + 7);
+    setCurrentWeekMonday(newMon);
   }
 
-  // カテゴリ変更時に初期ステップを自動セット
-  function handleSelectCategory(catId: string) {
-    setNewCategory(catId);
-    setShowCategoryPicker(false);
-    const options = STEP_OPTIONS[catId] || [];
-    if (options.length > 0) {
-      setNewStep(options[0]);
+  function goToToday() {
+    const today = new Date();
+    const todayStr = getLocalDateStr(today);
+    setSelectedDateStr(todayStr);
+    setCurrentWeekMonday(getMondayOfWeek(today));
+    setMiniMonthDate(new Date(today));
+  }
+
+  // ── ミニ月間カレンダー用データ計算 ─────────────────────────
+  const miniCalendarData = useMemo(() => {
+    const y = miniMonthDate.getFullYear();
+    const m = miniMonthDate.getMonth();
+    const firstDay = new Date(y, m, 1).getDay();
+    const offset = firstDay === 0 ? 6 : firstDay - 1; // 月曜始まり
+    const daysInMonth = new Date(y, m + 1, 0).getDate();
+    const daysInPrevMonth = new Date(y, m, 0).getDate();
+
+    const cells: {
+      day: number;
+      dateStr: string;
+      isCurrentMonth: boolean;
+      isToday: boolean;
+      isSelected: boolean;
+      dots: string[];
+    }[] = [];
+
+    // 前月の日付
+    for (let i = offset - 1; i >= 0; i--) {
+      const dNum = daysInPrevMonth - i;
+      const prevD = new Date(y, m - 1, dNum);
+      const dStr = formatDateToYMD(prevD);
+      const dots = Array.from(new Set(
+        filteredEvents
+          .filter(e => (e.targetDate <= dStr && dStr <= (e.endDate || e.targetDate)))
+          .map(e => CALENDAR_CATEGORIES.find(c => c.id === e.category)?.dotColor || '#64748B')
+      )).slice(0, 3);
+      cells.push({
+        day: dNum,
+        dateStr: dStr,
+        isCurrentMonth: false,
+        isToday: dStr === getLocalDateStr(),
+        isSelected: dStr === selectedDateStr,
+        dots,
+      });
+    }
+
+    // 当月の日付
+    for (let d = 1; d <= daysInMonth; d++) {
+      const currD = new Date(y, m, d);
+      const dStr = formatDateToYMD(currD);
+      const dots = Array.from(new Set(
+        filteredEvents
+          .filter(e => (e.targetDate <= dStr && dStr <= (e.endDate || e.targetDate)))
+          .map(e => CALENDAR_CATEGORIES.find(c => c.id === e.category)?.dotColor || '#64748B')
+      )).slice(0, 3);
+      cells.push({
+        day: d,
+        dateStr: dStr,
+        isCurrentMonth: true,
+        isToday: dStr === getLocalDateStr(),
+        isSelected: dStr === selectedDateStr,
+        dots,
+      });
+    }
+
+    // 翌月の日付
+    const remaining = 42 - cells.length;
+    for (let d = 1; d <= remaining; d++) {
+      const nextD = new Date(y, m + 1, d);
+      const dStr = formatDateToYMD(nextD);
+      const dots = Array.from(new Set(
+        filteredEvents
+          .filter(e => (e.targetDate <= dStr && dStr <= (e.endDate || e.targetDate)))
+          .map(e => CALENDAR_CATEGORIES.find(c => c.id === e.category)?.dotColor || '#64748B')
+      )).slice(0, 3);
+      cells.push({
+        day: d,
+        dateStr: dStr,
+        isCurrentMonth: false,
+        isToday: dStr === getLocalDateStr(),
+        isSelected: dStr === selectedDateStr,
+        dots,
+      });
+    }
+
+    return cells;
+  }, [miniMonthDate, filteredEvents, selectedDateStr]);
+
+  function prevMiniMonth() {
+    setMiniMonthDate(new Date(miniMonthDate.getFullYear(), miniMonthDate.getMonth() - 1, 1));
+  }
+
+  function nextMiniMonth() {
+    setMiniMonthDate(new Date(miniMonthDate.getFullYear(), miniMonthDate.getMonth() + 1, 1));
+  }
+
+  function handleSelectMiniDate(dateStr: string) {
+    setSelectedDateStr(dateStr);
+    const d = new Date(dateStr);
+    setCurrentWeekMonday(getMondayOfWeek(d));
+  }
+
+  // ── カテゴリトグル ────────────────────────────────────────
+  function toggleCategory(catId: string) {
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(catId)) {
+        if (next.size > 1) next.delete(catId);
+      } else {
+        next.add(catId);
+      }
+      return next;
+    });
+  }
+
+  function toggleAllCategories() {
+    if (selectedCategories.size === CALENDAR_CATEGORIES.length) {
+      setSelectedCategories(new Set(['面接', 'ES']));
     } else {
-      setNewStep('');
+      setSelectedCategories(new Set(CALENDAR_CATEGORIES.map(c => c.id)));
     }
   }
 
-  function handleOpenAddModal() {
+  // ── 直近の選考タスク (Prioritize) ─────────────────────────
+  const upcomingDeadlines = useMemo(() => {
+    const todayStr = getLocalDateStr();
+    return countdowns
+      .filter(e => !e.completed && (e.endDate || e.targetDate) >= todayStr)
+      .sort((a, b) => a.targetDate.localeCompare(b.targetDate))
+      .slice(0, 4);
+  }, [countdowns]);
+
+  // ── モーダル操作ハンドラー ────────────────────────────────
+  function handleOpenAddModal(initialDate?: string, initialTime?: string) {
     setEditingEventId(null);
     setNewCategory('面接');
     setNewCompany('');
     setNewStep('1次面接');
     setNewOtherStep('');
     setIsAllDay(false);
-    setNewDate(selectedDateStr || getLocalDateStr());
-    setNewTime('14:00');
-    setNewEndDate(selectedDateStr || getLocalDateStr());
-    setNewEndTime('15:00');
+    setNewDate(initialDate || selectedDateStr || getLocalDateStr());
+    setNewTime(initialTime || '10:00');
+    setNewEndDate(initialDate || selectedDateStr || getLocalDateStr());
+    const startHour = initialTime ? parseInt(initialTime.split(':')[0], 10) : 10;
+    setNewEndTime(initialTime ? `${String(Math.min(23, startHour + 1)).padStart(2, '0')}:30` : '11:30');
     setNewAlarm('none');
     setNewLocation('');
     setNewUrl('');
     setNewMemo('');
+    setNewPriority('high');
     setShowCategoryPicker(false);
     setShowAddModal(true);
   }
@@ -217,13 +432,14 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     setNewOtherStep(ev.step || '');
     setIsAllDay(Boolean(ev.isAllDay));
     setNewDate(ev.targetDate);
-    setNewTime(ev.time || '14:00');
+    setNewTime(ev.time || '10:00');
     setNewEndDate(ev.endDate || ev.targetDate);
-    setNewEndTime(ev.endTime || '15:00');
+    setNewEndTime(ev.endTime || '11:30');
     setNewAlarm(ev.alarm || 'none');
     setNewLocation(ev.location || '');
     setNewUrl(ev.url || '');
     setNewMemo('');
+    setNewPriority(ev.priority || 'high');
     setShowCategoryPicker(false);
     setShowAddModal(true);
   }
@@ -236,7 +452,6 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     const effectiveUid = currentUser?.uid || 'user-me';
     const effectiveStep = newCategory === 'その他' ? (newOtherStep.trim() || '予定') : (newStep || newCategory);
     
-    // 表示用タイトルの構築: 「企業名 【選考ステップ】」または「企業名」または「選考ステップ」
     let finalTitle = '';
     if (newCompany.trim() && effectiveStep) {
       finalTitle = `${newCompany.trim()} 【${effectiveStep}】`;
@@ -262,6 +477,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
       location: newLocation.trim() || undefined,
       url: newUrl.trim() || undefined,
       memo: newMemo.trim() || undefined,
+      priority: newPriority,
     };
 
     setShowAddModal(false);
@@ -275,16 +491,10 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
         onToast?.('カレンダーに登録されました！', 'success');
       }
       onUpdate();
-      setTimeout(() => {
-        window.location.reload();
-      }, 350);
     } catch (e) {
       console.error('handleAddEvent error:', e);
-      onToast?.('保存されました', 'success');
+      onToast?.('保存しました', 'success');
       onUpdate();
-      setTimeout(() => {
-        window.location.reload();
-      }, 350);
     }
   }
 
@@ -292,13 +502,9 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     await deleteCalendarEvent(id);
     onUpdate();
     onToast?.('予定を削除しました', 'success');
-    setTimeout(() => {
-      window.location.reload();
-    }, 350);
   }
 
   async function handleToggleComplete(ev: CountdownEvent) {
-    setOpenMenuEventId(null);
     const newCompleted = !ev.completed;
     await updateCalendarEvent(ev.id, { completed: newCompleted });
     onUpdate();
@@ -308,854 +514,1001 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
     );
   }
 
-  // 選択中の日付に該当するカウントダウンイベント (単日および複数日跨ぎに対応)
-  const selectedEvents = countdowns.filter((cd) => {
+  // 選択中の日付のイベント
+  const selectedEvents = filteredEvents.filter((cd) => {
     const start = cd.targetDate;
     const end = cd.endDate || cd.targetDate;
     return start <= selectedDateStr && selectedDateStr <= end;
   });
-  const selectedPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(selectedDateStr));
 
-  // ─── カレンダーマスの生成（前月・当月・翌月を含むフルグリッド） ───
-  const firstDayOfWeek = new Date(year, month, 1).getDay(); // 0(Sun) - 6(Sat)
-  const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const daysInPrevMonth = new Date(year, month, 0).getDate();
+  // ── 現在時刻インジケーター位置計算 ─────────────────────────
+  const now = currentTime;
+  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentTimeTop = ((currentMinutes - START_HOUR * 60) / 60) * HOUR_SLOT_HEIGHT;
+  const isCurrentTimeVisible = currentMinutes >= START_HOUR * 60 && currentMinutes <= END_HOUR * 60;
+  const todayYMD = getLocalDateStr();
 
-  interface CalendarGridCell {
-    day: number;
-    dateStr: string;
-    isCurrentMonth: boolean;
-    isToday: boolean;
-    isSelected: boolean;
-    dayOfWeek: number;
-    events: CountdownEvent[];
-    posts: FirestorePost[];
-  }
-
-  const calendarCells: CalendarGridCell[] = [];
-
-  // 前月の日付
-  for (let i = firstDayOfWeek - 1; i >= 0; i--) {
-    const dayNum = daysInPrevMonth - i;
-    const prevDate = new Date(year, month - 1, dayNum);
-    const dStr = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
-    const dayEvents = countdowns.filter((cd) => {
-      const start = cd.targetDate;
-      const end = cd.endDate || cd.targetDate;
-      return start <= dStr && dStr <= end;
-    });
-    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
-    calendarCells.push({
-      day: dayNum,
-      dateStr: dStr,
-      isCurrentMonth: false,
-      isToday: dStr === getLocalDateStr(),
-      isSelected: dStr === selectedDateStr,
-      dayOfWeek: prevDate.getDay(),
-      events: dayEvents,
-      posts: dayPosts,
-    });
-  }
-
-  // 当月の日付
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dayEvents = countdowns.filter((cd) => {
-      const start = cd.targetDate;
-      const end = cd.endDate || cd.targetDate;
-      return start <= dStr && dStr <= end;
-    });
-    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
-    const dayOfWeek = (firstDayOfWeek + d - 1) % 7;
-    calendarCells.push({
-      day: d,
-      dateStr: dStr,
-      isCurrentMonth: true,
-      isToday: dStr === getLocalDateStr(),
-      isSelected: dStr === selectedDateStr,
-      dayOfWeek,
-      events: dayEvents,
-      posts: dayPosts,
-    });
-  }
-
-  // 翌月の日付（35マスまたは42マスでグリッドを完成）
-  const totalCellsNeeded = calendarCells.length > 35 ? 42 : 35;
-  const remaining = totalCellsNeeded - calendarCells.length;
-  for (let d = 1; d <= remaining; d++) {
-    const nextDate = new Date(year, month + 1, d);
-    const dStr = `${nextDate.getFullYear()}-${String(nextDate.getMonth() + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    const dayEvents = countdowns.filter((cd) => {
-      const start = cd.targetDate;
-      const end = cd.endDate || cd.targetDate;
-      return start <= dStr && dStr <= end;
-    });
-    const dayPosts = myPosts.filter((p) => getPostDateStr(p).startsWith(dStr));
-    calendarCells.push({
-      day: d,
-      dateStr: dStr,
-      isCurrentMonth: false,
-      isToday: dStr === getLocalDateStr(),
-      isSelected: dStr === selectedDateStr,
-      dayOfWeek: nextDate.getDay(),
-      events: dayEvents,
-      posts: dayPosts,
-    });
-  }
-
-  // ─── 週ごとのイベントスロット（段位置）計算 ───
-  // 複数日にまたがる予定が同じ段（スロット）で横にまっすぐ繋がるように段位置を固定
-  interface CellSlotItem {
-    event: CountdownEvent;
-    isStart: boolean;
-    isEnd: boolean;
-    isMulti: boolean;
-    isWeekStart: boolean;
-    isWeekEnd: boolean;
-  }
-
-  interface ProcessedCell extends CalendarGridCell {
-    slots: (CellSlotItem | null)[];
-    overflowCount: number;
-  }
-
-  const processedCells: ProcessedCell[] = [];
-  const MAX_SLOTS = 2;
-
-  // 7日（1週間）ごとにスロット計算
-  for (let w = 0; w < calendarCells.length; w += 7) {
-    const weekCells = calendarCells.slice(w, w + 7);
-
-    // この週に一部でも被っている全イベントを収集
-    const weekEventsMap = new Map<string, CountdownEvent>();
-    weekCells.forEach(cell => {
-      cell.events.forEach(ev => weekEventsMap.set(ev.id, ev));
-    });
-    const weekEvents = Array.from(weekEventsMap.values());
-
-    // 複数日イベントを最優先 ＆ 期間が長い順・開始が早い順でソート
-    weekEvents.sort((a, b) => {
-      const aMulti = (a.endDate || a.targetDate) !== a.targetDate;
-      const bMulti = (b.endDate || b.targetDate) !== b.targetDate;
-      if (aMulti && !bMulti) return -1;
-      if (!aMulti && bMulti) return 1;
-      if (a.targetDate !== b.targetDate) return a.targetDate.localeCompare(b.targetDate);
-      const aEnd = a.endDate || a.targetDate;
-      const bEnd = b.endDate || b.targetDate;
-      return bEnd.localeCompare(aEnd);
-    });
-
-    // 7日分 × MAX_SLOTS のマトリクス
-    const weekGridSlots: (CellSlotItem | null)[][] = Array.from({ length: 7 }, () => []);
-    const dayOverflowCount: number[] = Array(7).fill(0);
-
-    // イベントごとに空いているスロット番号を探して配置
-    weekEvents.forEach(ev => {
-      const evStart = ev.targetDate;
-      const evEnd = ev.endDate || ev.targetDate;
-      const isMulti = evEnd !== evStart;
-
-      // この週内で該当する日のインデックス (0〜6)
-      const dayIndices: number[] = [];
-      for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
-        const dStr = weekCells[dayIdx].dateStr;
-        if (evStart <= dStr && dStr <= evEnd) {
-          dayIndices.push(dayIdx);
-        }
-      }
-
-      if (dayIndices.length === 0) return;
-
-      // 該当するすべての日で空いている最も低いスロット番号を見つける
-      let assignedSlot = -1;
-      for (let s = 0; s < MAX_SLOTS; s++) {
-        const isSlotFreeAllDays = dayIndices.every(dIdx => !weekGridSlots[dIdx][s]);
-        if (isSlotFreeAllDays) {
-          assignedSlot = s;
-          break;
-        }
-      }
-
-      if (assignedSlot !== -1) {
-        dayIndices.forEach(dIdx => {
-          const dStr = weekCells[dIdx].dateStr;
-          while (weekGridSlots[dIdx].length < assignedSlot) {
-            weekGridSlots[dIdx].push(null);
-          }
-          weekGridSlots[dIdx][assignedSlot] = {
-            event: ev,
-            isStart: dStr === evStart,
-            isEnd: dStr === evEnd,
-            isMulti,
-            isWeekStart: dIdx === 0,
-            isWeekEnd: dIdx === 6,
-          };
-        });
-      } else {
-        // スロット上限を超えた場合はオーバーフローカウント
-        dayIndices.forEach(dIdx => {
-          dayOverflowCount[dIdx]++;
-        });
-      }
-    });
-
-    // processedCells へ追加
-    weekCells.forEach((cell, dIdx) => {
-      processedCells.push({
-        ...cell,
-        slots: weekGridSlots[dIdx],
-        overflowCount: dayOverflowCount[dIdx],
-      });
-    });
-  }
-
-  // ─── イベントピル専用の透明感あふれるクリーンなパレット（黒ずみゼロ・高コントラスト） ───
-  interface PillStyle {
-    bg: string;
-    border: string;
-    text: string;
-  }
-
-  const TRANSLUCENT_PILL_STYLES: Record<string, PillStyle> = {
-    ES: {
-      bg: 'rgba(37, 99, 235, 0.12)',
-      border: 'rgba(37, 99, 235, 0.3)',
-      text: '#1D4ED8',
-    },
-    テスト: {
-      bg: 'rgba(5, 150, 105, 0.12)',
-      border: 'rgba(5, 150, 105, 0.3)',
-      text: '#047857',
-    },
-    '1次面接': {
-      bg: 'rgba(220, 38, 38, 0.12)',
-      border: 'rgba(220, 38, 38, 0.3)',
-      text: '#B91C1C',
-    },
-    '2次面接': {
-      bg: 'rgba(190, 18, 60, 0.12)',
-      border: 'rgba(190, 18, 60, 0.3)',
-      text: '#9F1239',
-    },
-    '最終面接': {
-      bg: 'rgba(185, 28, 28, 0.14)',
-      border: 'rgba(185, 28, 28, 0.35)',
-      text: '#991B1B',
-    },
-    'AI・動画面接': {
-      bg: 'rgba(8, 145, 178, 0.12)',
-      border: 'rgba(8, 145, 178, 0.3)',
-      text: '#0E7490',
-    },
-    '面談・リクルーター': {
-      bg: 'rgba(5, 150, 105, 0.12)',
-      border: 'rgba(5, 150, 105, 0.3)',
-      text: '#047857',
-    },
-    GD: {
-      bg: 'rgba(219, 39, 119, 0.12)',
-      border: 'rgba(219, 39, 119, 0.3)',
-      text: '#BE185D',
-    },
-    説明会: {
-      bg: 'rgba(217, 119, 6, 0.12)',
-      border: 'rgba(217, 119, 6, 0.3)',
-      text: '#B45309',
-    },
-    OB訪問: {
-      bg: 'rgba(13, 148, 136, 0.12)',
-      border: 'rgba(13, 148, 136, 0.3)',
-      text: '#0F766E',
-    },
-    インターン: {
-      bg: 'rgba(217, 119, 6, 0.14)',
-      border: 'rgba(217, 119, 6, 0.35)',
-      text: '#B45309',
-    },
-    その他: {
-      bg: 'rgba(100, 116, 139, 0.12)',
-      border: 'rgba(100, 116, 139, 0.28)',
-      text: '#475569',
-    },
-  };
-
-  function getPillStyle(ev: CountdownEvent): PillStyle {
-    if (TRANSLUCENT_PILL_STYLES[ev.category]) return TRANSLUCENT_PILL_STYLES[ev.category];
-    const str = ev.company || ev.title;
-    if (str.includes('証券') || str.includes('銀行') || str.includes('金融')) {
-      return { bg: 'rgba(37, 99, 235, 0.12)', border: 'rgba(37, 99, 235, 0.3)', text: '#1D4ED8' };
-    }
-    if (str.includes('不動産') || str.includes('商社')) {
-      return { bg: 'rgba(13, 148, 136, 0.12)', border: 'rgba(13, 148, 136, 0.3)', text: '#0F766E' };
-    }
-    if (str.includes('バイト') || str.includes('塾')) {
-      return { bg: 'rgba(220, 38, 38, 0.12)', border: 'rgba(220, 38, 38, 0.3)', text: '#B91C1C' };
-    }
-    if (str.includes('SPI') || str.includes('Webテスト')) {
-      return { bg: 'rgba(5, 150, 105, 0.12)', border: 'rgba(5, 150, 105, 0.3)', text: '#047857' };
-    }
-    return { bg: 'rgba(217, 119, 6, 0.12)', border: 'rgba(217, 119, 6, 0.3)', text: '#B45309' };
-  }
+  // ── 曜日名ラベル ──────────────────────────────────────────
+  const dayLabels = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
   return (
     <div style={{ animation: 'fadeIn 0.2s ease', paddingBottom: 60, position: 'relative' }}>
-      {/* ── Header ── */}
+      {/* ── Top Header Bar ── */}
       <div style={{
         position: 'sticky', top: 0,
         background: 'var(--bg-glass)',
         backdropFilter: 'blur(16px)',
-        zIndex: 10,
+        zIndex: 20,
         borderBottom: '1px solid var(--border-color)',
         padding: '12px 16px',
-        marginBottom: 16,
+        marginBottom: 20,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              就活カレンダー
-            </h1>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>選考締切・面接・予定を月間で一元管理</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                padding: '2px 8px', borderRadius: 99,
-                fontSize: '0.68rem', fontWeight: 700,
-                background: 'rgba(245, 158, 11, 0.12)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)',
+                width: 32, height: 32, borderRadius: 10,
+                background: 'linear-gradient(135deg, #2563EB 0%, #38BDF8 100%)',
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                color: '#FFFFFF', boxShadow: '0 4px 12px rgba(37, 99, 235, 0.25)',
               }}>
-                <Bell size={10} /> 3日前・前日リマインドON
+                <CalendarIcon size={18} />
               </span>
+              <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                就活カレンダー
+              </h1>
             </div>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', margin: '4px 0 0 40px' }}>
+              選考スケジュール・面接・締切を週間タイムラインで一元管理
+            </p>
           </div>
-          <button
-            onClick={() => { setNewDate(selectedDateStr); setShowAddModal(true); }}
-            className="btn btn-primary btn-sm"
-            style={{ gap: 6 }}
-          >
-            <Plus size={16} /> 予定を追加
-          </button>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* 週間/月間ビュー切替 */}
+            <div style={{
+              display: 'flex', alignItems: 'center',
+              background: 'var(--bg-surface-2)',
+              padding: 3, borderRadius: 10,
+              border: '1px solid var(--border-color)',
+            }}>
+              <button
+                type="button"
+                onClick={() => setViewMode('week')}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700,
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s ease',
+                  background: viewMode === 'week' ? '#FFFFFF' : 'transparent',
+                  color: viewMode === 'week' ? '#2563EB' : 'var(--text-muted)',
+                  boxShadow: viewMode === 'week' ? 'var(--shadow-sm)' : 'none',
+                }}
+              >
+                週間
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('month')}
+                style={{
+                  padding: '6px 14px', borderRadius: 8, fontSize: '0.8rem', fontWeight: 700,
+                  border: 'none', cursor: 'pointer', transition: 'all 0.15s ease',
+                  background: viewMode === 'month' ? '#FFFFFF' : 'transparent',
+                  color: viewMode === 'month' ? '#2563EB' : 'var(--text-muted)',
+                  boxShadow: viewMode === 'month' ? 'var(--shadow-sm)' : 'none',
+                }}
+              >
+                月間
+              </button>
+            </div>
+
+            {/* 新規予定追加ボタン */}
+            <button
+              onClick={() => handleOpenAddModal(selectedDateStr)}
+              className="btn btn-primary btn-sm"
+              style={{
+                gap: 6, padding: '8px 16px', borderRadius: 10,
+                background: 'linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%)',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.3)',
+                fontWeight: 700,
+              }}
+            >
+              <Plus size={16} /> 予定を追加
+            </button>
+          </div>
         </div>
       </div>
 
       <div style={{ padding: '0 16px' }}>
-        {/* ── Month Controls ── */}
-        <div className="card" style={{ padding: '16px 14px', marginBottom: 16, border: '1px solid var(--border-color)', borderRadius: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <button onClick={prevMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="前月">
-              <ChevronLeft size={20} />
-            </button>
-            <h2 style={{ fontSize: '1.125rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              {year}年 {month + 1}月
-            </h2>
-            <button onClick={nextMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="次月">
-              <ChevronRight size={20} />
-            </button>
-          </div>
+        {/* ── Dashboard Layout (Left Sidebar + Main Calendar) ── */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(270px, 300px) 1fr',
+          gap: 20,
+          alignItems: 'start',
+        }}>
 
-          {/* 曜日ヘッダー */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            textAlign: 'center',
-            marginBottom: 6,
-            borderBottom: '1px solid var(--border-color)',
-            paddingBottom: 6,
-          }}>
-            {dayNames.map((name, i) => (
-              <div key={name} style={{
-                fontSize: '0.78rem', fontWeight: 700,
-                color: i === 0 ? '#EF4444' : i === 6 ? '#3B82F6' : 'var(--text-muted)',
-              }}>
-                {name}
+          {/* ══════════════════════════════════════════════════════
+              LEFT SIDEBAR: Mini Calendar + Categories + Prioritize
+              ══════════════════════════════════════════════════════ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* 1. ミニ月間カレンダー */}
+            <div className="card" style={{
+              padding: 16, borderRadius: 18,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              {/* Mini Calendar Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  {miniMonthDate.getFullYear()}年 {miniMonthDate.getMonth() + 1}月
+                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <button
+                    onClick={prevMiniMonth}
+                    className="btn btn-ghost btn-icon btn-sm"
+                    style={{ width: 26, height: 26, color: '#10B981' }}
+                    aria-label="前月"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+                  <button
+                    onClick={nextMiniMonth}
+                    className="btn btn-ghost btn-icon btn-sm"
+                    style={{ width: 26, height: 26, color: '#10B981' }}
+                    aria-label="次月"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
               </div>
-            ))}
-          </div>
 
-          {/* カレンダーグリッド（スロット固定＆極細高コントラストバー） */}
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(7, 1fr)',
-            gap: '1px',
-            background: 'rgba(255, 255, 255, 0.08)',
-            borderRadius: 12,
-            overflow: 'hidden',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          }}>
-            {processedCells.map((cell) => {
-              const isSunday = cell.dayOfWeek === 0;
-              const isSaturday = cell.dayOfWeek === 6;
+              {/* Day of Week Labels */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                textAlign: 'center', marginBottom: 6,
+              }}>
+                {['月', '火', '水', '木', '金', '土', '日'].map((label, idx) => (
+                  <span key={label} style={{
+                    fontSize: '0.7rem', fontWeight: 700,
+                    color: idx >= 5 ? '#3B82F6' : 'var(--text-muted)',
+                  }}>
+                    {label}
+                  </span>
+                ))}
+              </div>
 
-              return (
-                <div
-                  key={cell.dateStr}
-                  onClick={() => setSelectedDateStr(cell.dateStr)}
-                  style={{
-                    minHeight: 56,
-                    padding: '3px 2px 2px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'flex-start',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    background: cell.isSelected
-                      ? (cell.isCurrentMonth
-                        ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(37, 99, 235, 0.1) 100%)'
-                        : 'rgba(56, 189, 248, 0.12)')
-                      : (cell.isCurrentMonth
-                        ? 'rgba(255, 255, 255, 0.03)'
-                        : 'rgba(0, 0, 0, 0.28)'),
-                    boxShadow: cell.isSelected ? 'inset 0 0 0 1.5px #38BDF8' : 'none',
-                    position: 'relative',
-                    zIndex: cell.isSelected ? 5 : 1,
-                  }}
-                >
-                  {/* 日付数字 */}
-                  <div style={{ width: '100%', display: 'flex', justifyContent: 'center', marginBottom: 2 }}>
-                    {cell.isToday ? (
+              {/* Mini Dates Grid */}
+              <div style={{
+                display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                gap: '2px', textAlign: 'center',
+              }}>
+                {miniCalendarData.map((cell) => {
+                  return (
+                    <button
+                      key={cell.dateStr}
+                      type="button"
+                      onClick={() => handleSelectMiniDate(cell.dateStr)}
+                      style={{
+                        padding: '6px 0 4px',
+                        borderRadius: 10,
+                        border: cell.isSelected ? '1.5px solid #2563EB' : '1.5px solid transparent',
+                        background: cell.isToday
+                          ? 'rgba(37, 99, 235, 0.12)'
+                          : cell.isSelected
+                          ? 'rgba(37, 99, 235, 0.06)'
+                          : 'transparent',
+                        cursor: 'pointer',
+                        display: 'flex', flexDirection: 'column',
+                        alignItems: 'center', justifyContent: 'center',
+                        minHeight: 34,
+                        transition: 'all 0.12s ease',
+                      }}
+                    >
                       <span style={{
-                        width: 18,
-                        height: 18,
-                        borderRadius: '50%',
-                        background: '#2563EB',
-                        color: '#FFFFFF',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '0.7rem',
-                        fontWeight: 800,
-                      }}>
-                        {cell.day}
-                      </span>
-                    ) : (
-                      <span style={{
-                        fontSize: '0.74rem',
-                        fontWeight: cell.isSelected ? 800 : 600,
+                        fontSize: '0.75rem',
+                        fontWeight: cell.isSelected || cell.isToday ? 800 : 500,
                         color: !cell.isCurrentMonth
-                          ? 'rgba(255, 255, 255, 0.22)'
-                          : isSunday
-                          ? '#EF4444'
-                          : isSaturday
-                          ? '#38BDF8'
+                          ? '#CBD5E1'
+                          : cell.isToday
+                          ? '#2563EB'
+                          : cell.isSelected
+                          ? '#1D4ED8'
                           : 'var(--text-primary)',
                       }}>
                         {cell.day}
                       </span>
-                    )}
-                  </div>
-
-                  {/* ── イベントバー（段固定・横一連で水平に繋がるスリムバー） ── */}
-                  <div style={{
-                    width: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    overflow: 'visible',
-                    zIndex: 2,
-                  }}>
-                    {cell.slots.map((slotItem, slotIndex) => {
-                      if (!slotItem) {
-                        // 空きスロット（下の段の予定位置を揃えるための透明スペーサー）
-                        return <div key={`spacer-${slotIndex}`} style={{ height: 13, width: '100%' }} />;
-                      }
-
-                      const { event: ev, isStart, isEnd, isMulti, isWeekStart, isWeekEnd } = slotItem;
-                      const style = getPillStyle(ev);
-                      const shouldShowText = isStart || isWeekStart || cell.day === 1;
-                      const displayTitle = (ev.completed ? '✔ ' : '') + (ev.company || ev.title);
-
-                      if (isMulti) {
-                        // 連日イベント（水平にまっすぐ繋がるリボンバー）
-                        return (
-                          <div
-                            key={`${ev.id}-${slotIndex}`}
+                      {/* Dots underneath */}
+                      <div style={{ display: 'flex', gap: 2, height: 4, marginTop: 2, alignItems: 'center' }}>
+                        {cell.dots.map((dotColor, di) => (
+                          <span
+                            key={di}
                             style={{
-                              height: 13,
-                              background: style.bg,
-                              color: style.text,
-                              borderTop: `1px solid ${style.border}`,
-                              borderBottom: `1px solid ${style.border}`,
-                              borderLeft: (isStart && isEnd) || isStart || isWeekStart ? `1px solid ${style.border}` : 'none',
-                              borderRight: (isStart && isEnd) || isEnd || isWeekEnd ? `1px solid ${style.border}` : 'none',
-                              borderRadius: (isStart && isEnd)
-                                ? 3
-                                : isStart || isWeekStart
-                                ? '3px 0 0 3px'
-                                : isEnd || isWeekEnd
-                                ? '0 3px 3px 0'
-                                : 0,
-                              marginLeft: isStart || isWeekStart ? 0 : -3,
-                              marginRight: isEnd || isWeekEnd ? 0 : -3,
-                              width: (isStart && isEnd)
-                                ? '100%'
-                                : isStart || isWeekStart
-                                ? 'calc(100% + 3px)'
-                                : isEnd || isWeekEnd
-                                ? 'calc(100% + 3px)'
-                                : 'calc(100% + 6px)',
-                              position: 'relative',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: '0.62rem',
-                              fontWeight: 800,
-                              padding: '0 2px',
-                              overflow: 'hidden',
-                              whiteSpace: 'nowrap',
-                              textOverflow: 'ellipsis',
-                              lineHeight: '12px',
+                              width: 3.5, height: 3.5, borderRadius: '50%',
+                              background: dotColor,
                             }}
-                            title={`${ev.title} (${ev.company || ''} ${ev.targetDate}〜${ev.endDate})`}
-                          >
-                            <span style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              display: shouldShowText ? 'inline-block' : 'none',
-                              width: '100%',
-                              textAlign: 'center',
-                            }}>
-                              {displayTitle}
-                            </span>
-                          </div>
-                        );
-                      }
-
-                      // 単日イベント
-                      return (
-                        <div
-                          key={`${ev.id}-${slotIndex}`}
-                          style={{
-                            height: 13,
-                            width: '100%',
-                            background: style.bg,
-                            color: style.text,
-                            border: `1px solid ${style.border}`,
-                            borderRadius: 3,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: '0.62rem',
-                            fontWeight: 800,
-                            padding: '0 2px',
-                            overflow: 'hidden',
-                            whiteSpace: 'nowrap',
-                            textOverflow: 'ellipsis',
-                            lineHeight: '12px',
-                          }}
-                          title={`${ev.title} (${ev.category})`}
-                        >
-                          <span style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            width: '100%',
-                            textAlign: 'center',
-                          }}>
-                            {displayTitle}
-                          </span>
-                        </div>
-                      );
-                    })}
-
-                    {cell.overflowCount > 0 && (
-                      <div style={{
-                        fontSize: '0.55rem',
-                        fontWeight: 800,
-                        color: 'var(--color-primary, #38BDF8)',
-                        textAlign: 'center',
-                        lineHeight: 1,
-                        marginTop: 1,
-                      }}>
-                        +{cell.overflowCount}
+                          />
+                        ))}
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── 選択された日の詳細カード (選考予定のみ) ── */}
-        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-            <h3 style={{ fontSize: '0.9375rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <CalendarIcon size={16} color="var(--color-primary)" />
-              {selectedDateStr} の予定
-            </h3>
-            <button
-              onClick={() => { setNewDate(selectedDateStr); setShowAddModal(true); }}
-              className="btn btn-secondary btn-sm"
-              style={{ gap: 4, fontSize: '0.75rem' }}
-            >
-              <Plus size={14} /> 予定追加
-            </button>
-          </div>
-
-          {selectedEvents.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-              この日の選考予定はありません
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {selectedEvents.map((ev) => {
-                const style = getCategoryStyle(ev.category);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const target = new Date(ev.targetDate);
-                target.setHours(0, 0, 0, 0);
-                const diffTime = target.getTime() - today.getTime();
-                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                const isPast = daysLeft < 0;
 
-                return (
-                  <div key={ev.id} style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '12px 14px', borderRadius: 14,
-                    background: isPast ? '#1E293B44' : style.bg,
-                    border: `1px solid ${isPast ? '#33415555' : style.border}`,
-                    opacity: isPast ? 0.7 : 1,
-                  }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
-                        {/* 締め切りカウントダウン表示 */}
-                        {isPast ? (
-                          <span style={{ background: '#334155', color: '#94A3B8', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700 }}>
-                            終了
-                          </span>
-                        ) : daysLeft === 0 ? (
-                          <span style={{ background: '#DC2626', color: 'white', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
-                            🔥 本日締切!
-                          </span>
-                        ) : (
-                          <span style={{ background: 'var(--color-primary-glow)', color: 'var(--color-primary)', border: '1px solid var(--color-primary)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
-                            ⏳ あと {daysLeft} 日
-                          </span>
-                        )}
+            {/* 2. 選考カテゴリ別フィルター (Categories Widget) */}
+            <div className="card" style={{
+              padding: 16, borderRadius: 18,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  カテゴリ
+                </span>
+                <button
+                  type="button"
+                  onClick={toggleAllCategories}
+                  style={{
+                    border: 'none', background: 'transparent',
+                    fontSize: '0.72rem', color: '#2563EB', fontWeight: 700,
+                    cursor: 'pointer', padding: '2px 4px',
+                  }}
+                >
+                  {selectedCategories.size === CALENDAR_CATEGORIES.length ? '解除' : '全選択'}
+                </button>
+              </div>
 
-                        {/* 志望度表示 (第一志望群 / 第二志望群 / 練習) */}
-                        {ev.priority === 'high' && (
-                          <span style={{ background: 'rgba(239, 68, 68, 0.12)', color: '#EF4444', border: '1px solid rgba(239, 68, 68, 0.3)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
-                            第一志望群
-                          </span>
-                        )}
-                        {ev.priority === 'medium' && (
-                          <span style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#F59E0B', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 700 }}>
-                            第二志望群
-                          </span>
-                        )}
-                        {ev.priority === 'low' && (
-                          <span style={{ background: 'var(--bg-surface-2)', color: '#94A3B8', border: '1px solid var(--border-color)', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 600 }}>
-                            練習
-                          </span>
-                        )}
-
-                        {/* 完了マーク表示 */}
-                        {ev.completed && (
-                          <span style={{
-                            background: '#10B981',
-                            color: 'white',
-                            padding: '1px 8px',
-                            borderRadius: 99,
-                            fontSize: '0.68rem',
-                            fontWeight: 800,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                          }}>
-                            <Check size={11} strokeWidth={3} /> 完了
-                          </span>
-                        )}
-
-                        <span className="badge" style={{ background: 'var(--bg-surface)', color: isPast ? '#94A3B8' : style.text, border: `1px solid ${isPast ? '#334155' : style.border}`, fontSize: '0.68rem', fontWeight: 700 }}>
-                          {ev.category}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {categoryStats.map((cat) => {
+                  const isChecked = selectedCategories.has(cat.id);
+                  return (
+                    <div
+                      key={cat.id}
+                      onClick={() => toggleCategory(cat.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        padding: '8px 10px', borderRadius: 10,
+                        background: isChecked ? cat.bg : 'var(--bg-surface-2)',
+                        border: `1px solid ${isChecked ? cat.border : 'transparent'}`,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{
+                          width: 18, height: 18, borderRadius: 5,
+                          background: isChecked ? cat.color : '#E2E8F0',
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          color: '#FFFFFF', transition: 'all 0.15s ease',
+                        }}>
+                          {isChecked && <Check size={12} strokeWidth={3} />}
+                        </span>
+                        <span style={{
+                          fontSize: '0.82rem', fontWeight: 700,
+                          color: isChecked ? 'var(--text-primary)' : 'var(--text-muted)',
+                        }}>
+                          {cat.label}
                         </span>
                       </div>
 
-                      <div style={{
-                        fontWeight: 700,
-                        fontSize: '0.925rem',
-                        color: ev.completed ? 'var(--text-muted)' : isPast ? '#94A3B8' : 'var(--text-primary)',
-                        textDecoration: ev.completed || isPast ? 'line-through' : 'none',
-                        opacity: ev.completed ? 0.75 : 1,
+                      <span style={{
+                        fontSize: '0.75rem', fontWeight: 600,
+                        color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 3,
                       }}>
-                        {ev.title}
-                      </div>
-
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
-                        {(ev.time || ev.endTime) && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600 }}>
-                            <Clock size={12} color="var(--color-primary)" />
-                            {ev.time ? (ev.endTime ? `${ev.time} 〜 ${ev.endTime}` : `${ev.time} 開始`) : `〜 ${ev.endTime}`}
-                          </span>
-                        )}
-                        {ev.endDate && ev.endDate !== ev.targetDate && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', fontWeight: 700 }}>
-                            🗓 期間: {ev.targetDate.slice(5).replace('-', '/')} 〜 {ev.endDate.slice(5).replace('-', '/')}
-                          </span>
-                        )}
-                        {ev.location && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <MapPin size={12} /> {ev.location}
-                          </span>
-                        )}
-                        {ev.url && (
-                          <a
-                            href={ev.url.startsWith('http') ? ev.url : `https://${ev.url}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-primary)', textDecoration: 'underline' }}
-                          >
-                            <LinkIcon size={12} /> リンク
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* ── アクションボタン群（完了・編集・削除） ── */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                      {/* 完了ボタン（直接タップ可能） */}
-                      <button
-                        onClick={() => handleToggleComplete(ev)}
-                        className="btn btn-sm"
-                        style={{
-                          background: ev.completed ? '#10B981' : 'rgba(16, 185, 129, 0.12)',
-                          color: ev.completed ? '#FFFFFF' : '#10B981',
-                          border: `1px solid ${ev.completed ? '#10B981' : 'rgba(16, 185, 129, 0.35)'}`,
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          padding: '5px 10px',
-                          borderRadius: 8,
-                          gap: 4,
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          transition: 'all 0.15s ease',
-                        }}
-                        title={ev.completed ? '未完了に戻す' : '完了マークをつける'}
-                      >
-                        <Check size={14} strokeWidth={2.5} />
-                        {ev.completed ? '完了' : '完了にする'}
-                      </button>
-
-                      {/* 編集ボタン */}
-                      <button
-                        onClick={() => handleOpenEditModal(ev)}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        style={{ color: 'var(--color-primary)', padding: '6px 8px' }}
-                        title="予定を編集"
-                      >
-                        <Edit3 size={16} />
-                      </button>
-
-                      {/* 予定を消す（カレンダーからのみ可能） */}
-                      <button
-                        onClick={() => handleDeleteEvent(ev.id)}
-                        className="btn btn-ghost btn-icon btn-sm"
-                        style={{ color: 'var(--text-muted)', padding: '6px 8px' }}
-                        title="カレンダーから予定を削除"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── 3. 🎯 選考ステップ別グループ管理（ES/テスト/面接/GD/インターン等） ── */}
-        <div className="card" style={{ padding: 18, marginBottom: 16 }}>
-          <div style={{ marginBottom: 14 }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
-              🎯 選考ステップ別グループ管理
-            </h3>
-            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: 2 }}>
-              「ES」「テスト」「1次面接〜最終面接」「GD」「インターン」など、選考段階ごとに予定・企業を整理
-            </p>
-          </div>
-
-          {(() => {
-            const STEP_ORDER = [
-              { name: 'ES・書類選考', match: (ev: CountdownEvent) => ev.category === 'ES' || ev.title.includes('ES') || ev.title.includes('締切') },
-              { name: 'テスト・適性検査', match: (ev: CountdownEvent) => ev.category === 'テスト' || ev.title.includes('テスト') || ev.title.includes('SPI') || ev.title.includes('玉手箱') || ev.title.includes('TG-WEB') || ev.title.includes('GAB') || ev.title.includes('CAB') },
-              { name: '1次面接', match: (ev: CountdownEvent) => ev.title.includes('1次面接') || ev.title.includes('一次面接') },
-              { name: '2次面接', match: (ev: CountdownEvent) => ev.title.includes('2次面接') || ev.title.includes('二次面接') },
-              { name: '3次〜面接', match: (ev: CountdownEvent) => ev.title.includes('3次') || ev.title.includes('三次') || ev.title.includes('4次') },
-              { name: '最終面接', match: (ev: CountdownEvent) => ev.title.includes('最終面接') || ev.title.includes('役員面接') || ev.title.includes('社長面接') },
-              { name: '動画面接・AI面接', match: (ev: CountdownEvent) => ev.title.includes('動画面接') || ev.title.includes('AI面接') },
-              { name: '面談・リクルーター', match: (ev: CountdownEvent) => ev.title.includes('面談') || ev.title.includes('リクルーター') },
-              { name: 'GD (グループディスカッション)', match: (ev: CountdownEvent) => ev.category === 'GD' || ev.title.includes('GD') },
-              { name: 'インターン', match: (ev: CountdownEvent) => ev.category === 'インターン' || ev.title.includes('インターン') },
-              { name: 'その他', match: (ev: CountdownEvent) => ev.category === 'その他' },
-            ];
-
-            const groupedSteps = STEP_ORDER.map((step) => {
-              const items = countdowns.filter((ev) => step.match(ev));
-              return { ...step, items };
-            }).filter((group) => group.items.length > 0);
-
-            if (groupedSteps.length === 0) {
-              return (
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', padding: '12px 0', textAlign: 'center' }}>
-                  予定を登録すると、「1次面接」「テスト」「ES」などの選考ステップごとに抱えている企業・予定が自動で整理されます！
-                </div>
-              );
-            }
-
-            return (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                {groupedSteps.map((group) => (
-                  <div key={group.name} style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-surface-2)', border: '1px solid var(--border-color)' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span>📍 【{group.name}】</span>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                        {group.items.length} 件の予定
+                        <Clock size={11} /> {cat.count}件 ({cat.timeStr})
                       </span>
                     </div>
+                  );
+                })}
+              </div>
+            </div>
 
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {group.items.map((ev) => {
-                        const today = new Date(); today.setHours(0, 0, 0, 0);
-                        const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
-                        const daysLeft = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                        const isPast = daysLeft < 0;
+            {/* 3. 優先度・直近締切 (Prioritize Widget) */}
+            <div className="card" style={{
+              padding: 16, borderRadius: 18,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <span style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+                  直近の選考・締切
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                  {upcomingDeadlines.length} 件
+                </span>
+              </div>
 
+              {upcomingDeadlines.length === 0 ? (
+                <div style={{ padding: '16px 0', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+                  直近の選考予定はありません
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {upcomingDeadlines.map((ev) => {
+                    const style = getCategoryStyle(ev.category);
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
+                    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+
+                    return (
+                      <div
+                        key={ev.id}
+                        onClick={() => handleSelectMiniDate(ev.targetDate)}
+                        style={{
+                          padding: '8px 10px', borderRadius: 10,
+                          background: 'var(--bg-surface-2)',
+                          borderLeft: `3px solid ${style.accent}`,
+                          cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{
+                            fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-primary)',
+                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          }}>
+                            {ev.company || ev.title}
+                          </div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: 2 }}>
+                            {ev.step || ev.category} ({ev.targetDate.slice(5).replace('-', '/')})
+                          </div>
+                        </div>
+
+                        <span style={{
+                          padding: '2px 8px', borderRadius: 99,
+                          fontSize: '0.68rem', fontWeight: 800,
+                          background: diffDays === 0 ? 'rgba(220, 38, 38, 0.12)' : 'rgba(37, 99, 235, 0.1)',
+                          color: diffDays === 0 ? '#DC2626' : '#2563EB',
+                          whiteSpace: 'nowrap', marginLeft: 6,
+                        }}>
+                          {diffDays === 0 ? '本日!' : `あと${diffDays}日`}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* ══════════════════════════════════════════════════════
+              RIGHT MAIN AREA: Weekly Schedule Time Grid or Month View
+              ══════════════════════════════════════════════════════ */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 0 }}>
+            {/* View Mode: WEEKLY TIME GRID */}
+            {viewMode === 'week' ? (
+              <div className="card" style={{
+                padding: '16px 18px', borderRadius: 20,
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-surface)',
+                boxShadow: 'var(--shadow-sm)',
+                overflow: 'hidden',
+              }}>
+                {/* 週間ヘッダーバー (Navigation & Week Badge) */}
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  marginBottom: 16, flexWrap: 'wrap', gap: 10,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <button
+                        onClick={prevWeek}
+                        className="btn btn-ghost btn-icon btn-sm"
+                        style={{ borderRadius: 8 }}
+                        aria-label="前週"
+                      >
+                        <ChevronLeft size={20} />
+                      </button>
+                      <button
+                        onClick={nextWeek}
+                        className="btn btn-ghost btn-icon btn-sm"
+                        style={{ borderRadius: 8 }}
+                        aria-label="次週"
+                      >
+                        <ChevronRight size={20} />
+                      </button>
+                    </div>
+
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                      {weekRangeStr}
+                    </h2>
+
+                    <span style={{
+                      padding: '3px 10px', borderRadius: 99,
+                      background: 'var(--bg-surface-2)', color: 'var(--text-muted)',
+                      fontSize: '0.75rem', fontWeight: 700,
+                      border: '1px solid var(--border-color)',
+                    }}>
+                      Week {weekNumber}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <button
+                      onClick={goToToday}
+                      className="btn btn-secondary btn-sm"
+                      style={{ fontSize: '0.78rem', fontWeight: 700, borderRadius: 8 }}
+                    >
+                      今日へジャンプ
+                    </button>
+                  </div>
+                </div>
+
+                {/* ── 終日・期間予定シェルフ (All-day shelf) ── */}
+                {(() => {
+                  const weekStartStr = formatDateToYMD(weekDays[0]);
+                  const weekEndStr = formatDateToYMD(weekDays[6]);
+                  const allDayEvents = filteredEvents.filter(ev => {
+                    const s = ev.targetDate;
+                    const e = ev.endDate || ev.targetDate;
+                    const inRange = s <= weekEndStr && e >= weekStartStr;
+                    return inRange && (ev.isAllDay || s !== e || !ev.time);
+                  });
+
+                  if (allDayEvents.length === 0) return null;
+
+                  return (
+                    <div style={{
+                      padding: '8px 12px', marginBottom: 12,
+                      background: 'var(--bg-surface-2)', borderRadius: 12,
+                      border: '1px solid var(--border-color)',
+                    }}>
+                      <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>
+                        📌 終日・期間選考・締切:
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                        {allDayEvents.map(ev => {
+                          const style = getCategoryStyle(ev.category);
+                          return (
+                            <div
+                              key={ev.id}
+                              onClick={() => handleOpenEditModal(ev)}
+                              style={{
+                                padding: '4px 10px', borderRadius: 8,
+                                background: style.bg,
+                                border: `1px solid ${style.border}`,
+                                borderLeft: `3px solid ${style.accent}`,
+                                fontSize: '0.75rem', fontWeight: 700, color: style.text,
+                                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+                              }}
+                            >
+                              <span>{ev.company ? `${ev.company} ${ev.step || ''}` : ev.title}</span>
+                              <span style={{ fontSize: '0.68rem', opacity: 0.8 }}>({ev.targetDate.slice(5)})</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── 週間タイムグリッド本体 ── */}
+                <div style={{
+                  overflowX: 'auto',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: 14,
+                  background: '#FFFFFF',
+                }}>
+                  {/* ヘッダー行: 曜日 + 日付 */}
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: '56px repeat(7, minmax(110px, 1fr))',
+                    borderBottom: '1px solid var(--border-color)',
+                    background: 'var(--bg-surface)',
+                  }}>
+                    <div style={{ borderRight: '1px solid var(--border-color)', padding: 8 }} />
+                    {weekDays.map((d, i) => {
+                      const dStr = formatDateToYMD(d);
+                      const isToday = dStr === todayYMD;
+                      const isSelected = dStr === selectedDateStr;
+                      return (
+                        <div
+                          key={dStr}
+                          onClick={() => setSelectedDateStr(dStr)}
+                          style={{
+                            padding: '10px 4px',
+                            textAlign: 'center',
+                            borderRight: i < 6 ? '1px solid var(--border-color)' : 'none',
+                            background: isSelected ? 'rgba(37, 99, 235, 0.04)' : 'transparent',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <div style={{
+                            fontSize: '0.72rem', fontWeight: 700,
+                            color: isToday ? '#2563EB' : 'var(--text-muted)',
+                            letterSpacing: '0.5px',
+                          }}>
+                            {dayLabels[i]}
+                          </div>
+                          <div style={{ marginTop: 2 }}>
+                            {isToday ? (
+                              <span style={{
+                                width: 26, height: 26, borderRadius: '50%',
+                                background: '#2563EB', color: '#FFFFFF',
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '0.85rem', fontWeight: 800,
+                                boxShadow: '0 2px 8px rgba(37, 99, 235, 0.35)',
+                              }}>
+                                {d.getDate()}
+                              </span>
+                            ) : (
+                              <span style={{
+                                fontSize: '0.95rem', fontWeight: isSelected ? 800 : 600,
+                                color: isSelected ? '#2563EB' : 'var(--text-primary)',
+                              }}>
+                                {d.getDate()}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* タイムグリッド行 (08:00 〜 22:00) */}
+                  <div style={{
+                    position: 'relative',
+                    display: 'grid',
+                    gridTemplateColumns: '56px repeat(7, minmax(110px, 1fr))',
+                    height: TOTAL_HOURS * HOUR_SLOT_HEIGHT,
+                  }}>
+                    {/* 左側の時間軸 */}
+                    <div style={{
+                      borderRight: '1px solid var(--border-color)',
+                      background: 'var(--bg-surface)',
+                      userSelect: 'none',
+                    }}>
+                      {Array.from({ length: TOTAL_HOURS }).map((_, hIndex) => {
+                        const hour = START_HOUR + hIndex;
+                        const hourLabel = `${String(hour).padStart(2, '0')}:00`;
                         return (
                           <div
-                            key={ev.id}
+                            key={hour}
                             style={{
-                              padding: '8px 12px',
-                              borderRadius: 8,
-                              background: isPast ? 'var(--bg-surface)' : 'rgba(37, 99, 235, 0.12)',
-                              border: `1px solid ${isPast ? 'var(--border-color)' : 'rgba(37, 99, 235, 0.35)'}`,
-                              opacity: isPast ? 0.6 : 1,
-                              minWidth: 140,
+                              height: HOUR_SLOT_HEIGHT,
+                              boxSizing: 'border-box',
+                              borderBottom: '1px solid var(--border-color)',
+                              padding: '4px 6px 0 0',
+                              textAlign: 'right',
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              color: 'var(--text-muted)',
                             }}
                           >
-                            <div style={{ fontSize: '0.82rem', fontWeight: 800, color: isPast ? 'var(--text-muted)' : 'var(--text-primary)' }}>
-                              {ev.company ? `${ev.company}` : ev.title}
-                            </div>
-                            {ev.company && (
-                              <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 1 }}>
-                                {ev.step || ev.title}
-                              </div>
-                            )}
-                            <div style={{ fontSize: '0.68rem', color: isPast ? 'var(--text-muted)' : '#60A5FA', fontWeight: 700, marginTop: 4 }}>
-                              {isPast ? '完了' : daysLeft === 0 ? '本日予定!' : `あと${daysLeft}日`} ({ev.targetDate.slice(5).replace('-', '/')})
-                            </div>
+                            {hourLabel}
                           </div>
                         );
                       })}
                     </div>
-                  </div>
-                ))}
-              </div>
-            );
-          })()}
-        </div>
 
-        {/* ── 4. カレンダー本体 ── */}
+                    {/* 7日分の列 */}
+                    {weekDays.map((d, colIndex) => {
+                      const dStr = formatDateToYMD(d);
+                      const isToday = dStr === todayYMD;
+
+                      // この日のタイムイベント (timeが指定されているもの)
+                      const dayTimedEvents = filteredEvents.filter(ev => {
+                        const s = ev.targetDate;
+                        const e = ev.endDate || ev.targetDate;
+                        return s <= dStr && dStr <= e && Boolean(ev.time) && !ev.isAllDay;
+                      });
+
+                      return (
+                        <div
+                          key={dStr}
+                          onClick={(e) => {
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            const clickY = e.clientY - rect.top;
+                            const clickedMinutes = Math.floor((clickY / HOUR_SLOT_HEIGHT) * 60) + START_HOUR * 60;
+                            const h = Math.min(21, Math.max(8, Math.floor(clickedMinutes / 60)));
+                            const timeStr = `${String(h).padStart(2, '0')}:00`;
+                            handleOpenAddModal(dStr, timeStr);
+                          }}
+                          style={{
+                            position: 'relative',
+                            borderRight: colIndex < 6 ? '1px solid var(--border-color)' : 'none',
+                            background: isToday ? 'rgba(37, 99, 235, 0.015)' : '#FFFFFF',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          {/* 1時間ごとの罫線 */}
+                          {Array.from({ length: TOTAL_HOURS }).map((_, hIndex) => (
+                            <div
+                              key={hIndex}
+                              style={{
+                                height: HOUR_SLOT_HEIGHT,
+                                boxSizing: 'border-box',
+                                borderBottom: '1px solid rgba(226, 232, 240, 0.6)',
+                              }}
+                            />
+                          ))}
+
+                          {/* ── 現在時刻インジケーターライン (今日の場合のみ) ── */}
+                          {isToday && isCurrentTimeVisible && (
+                            <div
+                              style={{
+                                position: 'absolute',
+                                top: currentTimeTop,
+                                left: 0,
+                                right: 0,
+                                height: 2,
+                                background: '#2563EB',
+                                zIndex: 10,
+                                pointerEvents: 'none',
+                              }}
+                            >
+                              <span style={{
+                                position: 'absolute',
+                                left: -4,
+                                top: -4,
+                                width: 10,
+                                height: 10,
+                                borderRadius: '50%',
+                                background: '#2563EB',
+                                boxShadow: '0 0 6px rgba(37, 99, 235, 0.8)',
+                              }} />
+                            </div>
+                          )}
+
+                          {/* ── イベントカード群 ── */}
+                          {dayTimedEvents.map(ev => {
+                            const style = getCategoryStyle(ev.category);
+                            const startMin = parseTimeToMinutes(ev.time, 600);
+                            const endMin = ev.endTime ? parseTimeToMinutes(ev.endTime, startMin + 60) : startMin + 60;
+                            const durationMin = Math.max(30, endMin - startMin);
+
+                            const top = ((startMin - START_HOUR * 60) / 60) * HOUR_SLOT_HEIGHT;
+                            const height = Math.max(36, (durationMin / 60) * HOUR_SLOT_HEIGHT - 4);
+
+                            return (
+                              <div
+                                key={ev.id}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenEditModal(ev);
+                                }}
+                                style={{
+                                  position: 'absolute',
+                                  top: Math.max(2, top),
+                                  left: 3,
+                                  right: 3,
+                                  height,
+                                  background: style.bg,
+                                  borderLeft: `4px solid ${style.accent}`,
+                                  borderTop: `1px solid ${style.border}`,
+                                  borderRight: `1px solid ${style.border}`,
+                                  borderBottom: `1px solid ${style.border}`,
+                                  borderRadius: 8,
+                                  padding: '5px 8px',
+                                  boxShadow: '0 2px 6px rgba(15, 23, 42, 0.04)',
+                                  cursor: 'pointer',
+                                  zIndex: 5,
+                                  overflow: 'hidden',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  justifyContent: 'space-between',
+                                  transition: 'transform 0.12s ease, box-shadow 0.12s ease',
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-1px)';
+                                  e.currentTarget.style.boxShadow = '0 6px 14px rgba(15, 23, 42, 0.08)';
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.transform = 'none';
+                                  e.currentTarget.style.boxShadow = '0 2px 6px rgba(15, 23, 42, 0.04)';
+                                }}
+                              >
+                                <div>
+                                  <div style={{
+                                    fontSize: '0.78rem',
+                                    fontWeight: 800,
+                                    color: 'var(--text-primary)',
+                                    lineHeight: 1.25,
+                                    textDecoration: ev.completed ? 'line-through' : 'none',
+                                    opacity: ev.completed ? 0.65 : 1,
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}>
+                                    {ev.company ? `${ev.company}` : ev.title}
+                                  </div>
+                                  {ev.step && (
+                                    <div style={{
+                                      fontSize: '0.68rem',
+                                      fontWeight: 600,
+                                      color: style.text,
+                                      marginTop: 1,
+                                      overflow: 'hidden',
+                                      textOverflow: 'ellipsis',
+                                      whiteSpace: 'nowrap',
+                                    }}>
+                                      {ev.step}
+                                    </div>
+                                  )}
+                                </div>
+
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'space-between',
+                                  fontSize: '0.66rem',
+                                  color: 'var(--text-muted)',
+                                  fontWeight: 600,
+                                  marginTop: 2,
+                                }}>
+                                  <span>{ev.time}{ev.endTime ? ` - ${ev.endTime}` : ''}</span>
+                                  {ev.completed && (
+                                    <span style={{ color: '#16A34A', display: 'inline-flex', alignItems: 'center' }}>
+                                      <CheckCircle2 size={12} />
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* View Mode: FULL MONTH VIEW (月間ビュー) */
+              <div className="card" style={{
+                padding: '16px 18px', borderRadius: 20,
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-surface)',
+                boxShadow: 'var(--shadow-sm)',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                  <button onClick={prevMiniMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="前月">
+                    <ChevronLeft size={20} />
+                  </button>
+                  <h2 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                    {miniMonthDate.getFullYear()}年 {miniMonthDate.getMonth() + 1}月
+                  </h2>
+                  <button onClick={nextMiniMonth} className="btn btn-ghost btn-icon btn-sm" aria-label="次月">
+                    <ChevronRight size={20} />
+                  </button>
+                </div>
+
+                {/* 曜日ヘッダー */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                  textAlign: 'center', marginBottom: 6,
+                  borderBottom: '1px solid var(--border-color)', paddingBottom: 6,
+                }}>
+                  {['月', '火', '水', '木', '金', '土', '日'].map((name, i) => (
+                    <div key={name} style={{
+                      fontSize: '0.78rem', fontWeight: 700,
+                      color: i >= 5 ? '#3B82F6' : 'var(--text-muted)',
+                    }}>
+                      {name}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 月間グリッド */}
+                <div style={{
+                  display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
+                  gap: '1px', background: 'var(--border-color)',
+                  borderRadius: 12, overflow: 'hidden',
+                }}>
+                  {miniCalendarData.map((cell) => {
+                    const dayEvents = filteredEvents.filter(e => {
+                      const s = e.targetDate;
+                      const end = e.endDate || e.targetDate;
+                      return s <= cell.dateStr && cell.dateStr <= end;
+                    });
+
+                    return (
+                      <div
+                        key={cell.dateStr}
+                        onClick={() => setSelectedDateStr(cell.dateStr)}
+                        style={{
+                          minHeight: 74,
+                          padding: '4px',
+                          background: cell.isSelected
+                            ? 'rgba(37, 99, 235, 0.08)'
+                            : cell.isCurrentMonth
+                            ? '#FFFFFF'
+                            : 'var(--bg-surface-2)',
+                          cursor: 'pointer',
+                          display: 'flex', flexDirection: 'column',
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          {cell.isToday ? (
+                            <span style={{
+                              width: 20, height: 20, borderRadius: '50%',
+                              background: '#2563EB', color: '#FFFFFF',
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              fontSize: '0.72rem', fontWeight: 800,
+                            }}>
+                              {cell.day}
+                            </span>
+                          ) : (
+                            <span style={{
+                              fontSize: '0.75rem',
+                              fontWeight: cell.isSelected ? 800 : 600,
+                              color: !cell.isCurrentMonth ? '#94A3B8' : 'var(--text-primary)',
+                            }}>
+                              {cell.day}
+                            </span>
+                          )}
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+                          {dayEvents.slice(0, 2).map((ev) => {
+                            const style = getCategoryStyle(ev.category);
+                            return (
+                              <div
+                                key={ev.id}
+                                style={{
+                                  fontSize: '0.65rem', fontWeight: 700,
+                                  background: style.bg, color: style.text,
+                                  borderLeft: `2px solid ${style.accent}`,
+                                  padding: '2px 4px', borderRadius: 4,
+                                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {ev.company || ev.title}
+                              </div>
+                            );
+                          })}
+                          {dayEvents.length > 2 && (
+                            <span style={{ fontSize: '0.62rem', color: '#2563EB', fontWeight: 700, textAlign: 'center' }}>
+                              +{dayEvents.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── 選択日の詳細カード (選考予定リスト) ── */}
+            <div className="card" style={{
+              padding: 18, borderRadius: 18,
+              border: '1px solid var(--border-color)',
+              background: 'var(--bg-surface)',
+              boxShadow: 'var(--shadow-sm)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: 6, margin: 0 }}>
+                  <CalendarIcon size={16} color="#2563EB" />
+                  {formatJapaneseDate(selectedDateStr)} の予定
+                </h3>
+                <button
+                  onClick={() => handleOpenAddModal(selectedDateStr)}
+                  className="btn btn-secondary btn-sm"
+                  style={{ gap: 4, fontSize: '0.75rem', borderRadius: 8 }}
+                >
+                  <Plus size={14} /> 予定追加
+                </button>
+              </div>
+
+              {selectedEvents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  この日の予定はありません
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {selectedEvents.map((ev) => {
+                    const style = getCategoryStyle(ev.category);
+                    const today = new Date(); today.setHours(0, 0, 0, 0);
+                    const target = new Date(ev.targetDate); target.setHours(0, 0, 0, 0);
+                    const diffDays = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                    const isPast = diffDays < 0;
+
+                    return (
+                      <div
+                        key={ev.id}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                          padding: '12px 14px', borderRadius: 14,
+                          background: style.bg,
+                          border: `1px solid ${style.border}`,
+                          borderLeft: `4px solid ${style.accent}`,
+                        }}
+                      >
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4, flexWrap: 'wrap' }}>
+                            {diffDays === 0 ? (
+                              <span style={{ background: '#DC2626', color: 'white', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
+                                🔥 本日締切!
+                              </span>
+                            ) : !isPast ? (
+                              <span style={{ background: 'rgba(37, 99, 235, 0.12)', color: '#2563EB', border: '1px solid #BFDBFE', padding: '1px 8px', borderRadius: 99, fontSize: '0.68rem', fontWeight: 800 }}>
+                                ⏳ あと {diffDays} 日
+                              </span>
+                            ) : null}
+
+                            <span style={{
+                              padding: '1px 8px', borderRadius: 99,
+                              fontSize: '0.68rem', fontWeight: 700,
+                              background: style.bg, color: style.text, border: `1px solid ${style.border}`,
+                            }}>
+                              {ev.category}
+                            </span>
+                          </div>
+
+                          <div style={{
+                            fontSize: '0.95rem', fontWeight: 800, color: 'var(--text-primary)',
+                            textDecoration: ev.completed ? 'line-through' : 'none',
+                            opacity: ev.completed ? 0.6 : 1,
+                          }}>
+                            {ev.title}
+                          </div>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {ev.time && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <Clock size={12} /> {ev.time}{ev.endTime ? ` - ${ev.endTime}` : ''}
+                              </span>
+                            )}
+                            {ev.location && (
+                              <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                                <MapPin size={12} /> {ev.location}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <button
+                            onClick={() => handleToggleComplete(ev)}
+                            style={{
+                              background: ev.completed ? '#16A34A' : 'var(--bg-surface)',
+                              color: ev.completed ? '#FFFFFF' : 'var(--text-muted)',
+                              width: 32, height: 32, borderRadius: 8,
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', border: '1px solid var(--border-color)',
+                            }}
+                            title={ev.completed ? '未完了に戻す' : '完了にする'}
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleOpenEditModal(ev)}
+                            style={{
+                              background: 'var(--bg-surface)',
+                              color: 'var(--text-muted)',
+                              width: 32, height: 32, borderRadius: 8,
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', border: '1px solid var(--border-color)',
+                            }}
+                            title="編集"
+                          >
+                            <Edit3 size={16} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteEvent(ev.id)}
+                            style={{
+                              background: 'var(--bg-surface)',
+                              color: '#EF4444',
+                              width: 32, height: 32, borderRadius: 8,
+                              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              cursor: 'pointer', border: '1px solid var(--border-color)',
+                            }}
+                            title="削除"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* ── 新・選考予定追加/編集モーダル (iOS/TimeTree風カードデザイン) ── */}
@@ -1202,7 +1555,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                 onClick={handleAddEvent}
                 style={{
                   border: 'none', background: 'transparent',
-                  color: 'var(--color-primary, #38BDF8)', fontSize: '0.95rem', fontWeight: 800,
+                  color: '#38BDF8', fontSize: '0.95rem', fontWeight: 800,
                   cursor: 'pointer', padding: '4px 6px',
                 }}
               >
@@ -1211,12 +1564,11 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {/* ── 1. カレンダー (カテゴリ/タグ選択) ── */}
+              {/* 1. カテゴリ選択 */}
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                overflow: 'hidden',
+                borderRadius: 14, overflow: 'hidden',
               }}>
                 <div
                   onClick={() => setShowCategoryPicker(!showCategoryPicker)}
@@ -1226,7 +1578,7 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   }}
                 >
                   <span style={{ fontSize: '0.925rem', fontWeight: 600, color: '#E2E8F0' }}>
-                    カレンダー
+                    カテゴリ
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span style={{
@@ -1243,386 +1595,207 @@ export default function CalendarSection({ onUpdate, onToast }: CalendarSectionPr
                   </div>
                 </div>
 
-                {/* カテゴリ選択ドロワー/チップ一覧 */}
                 {showCategoryPicker && (
                   <div style={{
                     padding: '10px 14px 14px',
                     borderTop: '1px solid rgba(255, 255, 255, 0.06)',
-                    background: 'rgba(0, 0, 0, 0.2)',
-                    display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8,
+                    display: 'flex', flexWrap: 'wrap', gap: 8,
                   }}>
-                    {CALENDAR_CATEGORIES.map((c) => {
-                      const isSelected = newCategory === c.id;
-                      return (
-                        <button
-                          key={c.id}
-                          type="button"
-                          onClick={() => handleSelectCategory(c.id)}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                            padding: '10px 8px', borderRadius: 10,
-                            border: `1.5px solid ${isSelected ? c.color : 'rgba(255, 255, 255, 0.1)'}`,
-                            background: isSelected ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.03)',
-                            color: '#FFFFFF', fontSize: '0.825rem', fontWeight: isSelected ? 800 : 600,
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}
-                        >
-                          <span style={{ width: 8, height: 8, borderRadius: '50%', background: c.dotColor }} />
-                          {c.label}
-                        </button>
-                      );
-                    })}
+                    {CALENDAR_CATEGORIES.map((c) => (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => {
+                          setNewCategory(c.id);
+                          setShowCategoryPicker(false);
+                          const opts = STEP_OPTIONS[c.id] || [];
+                          setNewStep(opts.length > 0 ? opts[0] : '');
+                        }}
+                        style={{
+                          padding: '6px 12px', borderRadius: 99,
+                          border: newCategory === c.id ? `1.5px solid ${c.color}` : '1px solid rgba(255, 255, 255, 0.12)',
+                          background: newCategory === c.id ? c.color : 'rgba(255, 255, 255, 0.06)',
+                          color: '#FFFFFF', fontSize: '0.82rem', fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        {c.label}
+                      </button>
+                    ))}
                   </div>
                 )}
               </div>
 
-              {/* ── 2. タイトル（企業名） ── */}
+              {/* 2. 企業名 */}
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                padding: '4px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                borderRadius: 14, padding: '10px 16px',
               }}>
+                <label style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600, display: 'block', marginBottom: 4 }}>
+                  企業名
+                </label>
                 <input
                   type="text"
+                  placeholder="例: トヨタ自動車, 三菱商事"
                   value={newCompany}
                   onChange={(e) => setNewCompany(e.target.value)}
-                  placeholder="タイトル (企業名)"
                   style={{
-                    width: '100%',
-                    background: 'transparent',
-                    border: 'none',
-                    outline: 'none',
-                    color: '#FFFFFF',
-                    fontSize: '0.95rem',
-                    fontWeight: 600,
-                    padding: '11px 0',
+                    width: '100%', background: 'transparent', border: 'none',
+                    color: '#FFFFFF', fontSize: '0.95rem', fontWeight: 700, outline: 'none',
                   }}
                 />
-                <Clock size={18} color="#64748B" />
               </div>
 
-              {/* ── 3. 選考ステップ (カテゴリ連動) ── */}
+              {/* 3. 選考ステップ */}
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                padding: '12px 14px',
+                borderRadius: 14, padding: '12px 16px',
               }}>
-                <div style={{ fontSize: '0.78rem', fontWeight: 700, color: '#94A3B8', marginBottom: 8 }}>
+                <label style={{ fontSize: '0.75rem', color: '#94A3B8', fontWeight: 600, display: 'block', marginBottom: 8 }}>
                   選考ステップ
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {(STEP_OPTIONS[newCategory] || []).map((step) => (
+                    <button
+                      key={step}
+                      type="button"
+                      onClick={() => setNewStep(step)}
+                      style={{
+                        padding: '5px 12px', borderRadius: 8,
+                        border: newStep === step ? '1.5px solid #38BDF8' : '1px solid rgba(255, 255, 255, 0.1)',
+                        background: newStep === step ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.04)',
+                        color: newStep === step ? '#38BDF8' : '#E2E8F0',
+                        fontSize: '0.8rem', fontWeight: 700, cursor: 'pointer',
+                      }}
+                    >
+                      {step}
+                    </button>
+                  ))}
                 </div>
-
-                {newCategory === 'その他' ? (
-                  <input
-                    type="text"
-                    value={newOtherStep}
-                    onChange={(e) => setNewOtherStep(e.target.value)}
-                    placeholder="選考内容・予定の詳細を入力"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
-                      borderRadius: 8,
-                      outline: 'none',
-                      color: '#FFFFFF',
-                      fontSize: '0.88rem',
-                      padding: '8px 12px',
-                    }}
-                  />
-                ) : (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {(STEP_OPTIONS[newCategory] || []).map((stepOpt) => {
-                      const isSelected = newStep === stepOpt;
-                      return (
-                        <button
-                          key={stepOpt}
-                          type="button"
-                          onClick={() => setNewStep(stepOpt)}
-                          style={{
-                            padding: '6px 13px', borderRadius: 99,
-                            fontSize: '0.8rem', fontWeight: isSelected ? 800 : 600,
-                            background: isSelected ? 'var(--color-primary, #38BDF8)' : 'rgba(255, 255, 255, 0.06)',
-                            color: isSelected ? '#0F172A' : '#E2E8F0',
-                            border: `1px solid ${isSelected ? 'var(--color-primary, #38BDF8)' : 'rgba(255, 255, 255, 0.1)'}`,
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}
-                        >
-                          {stepOpt}
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
               </div>
 
-              {/* ── 4. 日時・期間設定 (iOS グループスタイル) ── */}
+              {/* 4. 日付 & 時刻 */}
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                overflow: 'hidden',
+                borderRadius: 14, padding: '12px 16px',
+                display: 'flex', flexDirection: 'column', gap: 10,
               }}>
-                {/* 終日予定 トグル */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                }}>
-                  <span style={{ fontSize: '0.925rem', fontWeight: 600, color: '#E2E8F0' }}>
-                    終日予定
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setIsAllDay(!isAllDay)}
-                    style={{
-                      width: 48, height: 28, borderRadius: 14,
-                      background: isAllDay ? '#10B981' : 'rgba(255, 255, 255, 0.2)',
-                      border: 'none', cursor: 'pointer', position: 'relative',
-                      transition: 'background 0.2s ease', padding: 2,
-                    }}
-                  >
-                    <div style={{
-                      width: 24, height: 24, borderRadius: '50%',
-                      background: '#FFFFFF',
-                      transform: isAllDay ? 'translateX(20px)' : 'translateX(0)',
-                      transition: 'transform 0.2s ease',
-                      boxShadow: '0 2px 5px rgba(0, 0, 0, 0.3)',
-                    }} />
-                  </button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#E2E8F0' }}>終日イベント</span>
+                  <input
+                    type="checkbox"
+                    checked={isAllDay}
+                    onChange={(e) => setIsAllDay(e.target.checked)}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
                 </div>
 
-                {/* 開始日時 */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                }}>
-                  <span style={{ fontSize: '0.925rem', fontWeight: 600, color: '#E2E8F0' }}>
-                    開始
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div>
+                    <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>開始日</label>
                     <input
                       type="date"
                       value={newDate}
-                      onChange={(e) => {
-                        setNewDate(e.target.value);
-                        if (newEndDate < e.target.value) setNewEndDate(e.target.value);
-                      }}
+                      onChange={(e) => setNewDate(e.target.value)}
                       style={{
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        borderRadius: 8, color: '#FFFFFF',
-                        fontSize: '0.85rem', fontWeight: 700, padding: '5px 8px',
-                        outline: 'none', cursor: 'pointer',
+                        width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                        color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
                       }}
                     />
-                    {!isAllDay && (
+                  </div>
+                  {!isAllDay && (
+                    <div>
+                      <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>開始時刻</label>
                       <input
                         type="time"
                         value={newTime}
                         onChange={(e) => setNewTime(e.target.value)}
                         style={{
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
-                          borderRadius: 8, color: '#FFFFFF',
-                          fontSize: '0.85rem', fontWeight: 700, padding: '5px 8px',
-                          outline: 'none', cursor: 'pointer',
+                          width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                          color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
                         }}
                       />
-                    )}
-                  </div>
+                    </div>
+                  )}
                 </div>
 
-                {/* 終了日時 */}
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  padding: '12px 16px',
-                }}>
-                  <span style={{ fontSize: '0.925rem', fontWeight: 600, color: '#E2E8F0' }}>
-                    終了
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <input
-                      type="date"
-                      value={newEndDate}
-                      min={newDate}
-                      onChange={(e) => setNewEndDate(e.target.value)}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.08)',
-                        border: '1px solid rgba(255, 255, 255, 0.12)',
-                        borderRadius: 8, color: '#FFFFFF',
-                        fontSize: '0.85rem', fontWeight: 700, padding: '5px 8px',
-                        outline: 'none', cursor: 'pointer',
-                      }}
-                    />
-                    {!isAllDay && (
+                {!isAllDay && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                    <div>
+                      <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>終了日</label>
+                      <input
+                        type="date"
+                        value={newEndDate}
+                        onChange={(e) => setNewEndDate(e.target.value)}
+                        style={{
+                          width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                          color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>終了時刻</label>
                       <input
                         type="time"
                         value={newEndTime}
                         onChange={(e) => setNewEndTime(e.target.value)}
                         style={{
-                          background: 'rgba(255, 255, 255, 0.08)',
-                          border: '1px solid rgba(255, 255, 255, 0.12)',
-                          borderRadius: 8, color: '#FFFFFF',
-                          fontSize: '0.85rem', fontWeight: 700, padding: '5px 8px',
-                          outline: 'none', cursor: 'pointer',
+                          width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                          border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                          color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
                         }}
                       />
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
 
-              {/* ── 5. 通知アラーム ── */}
+              {/* 5. 場所・URL */}
               <div style={{
                 background: 'rgba(255, 255, 255, 0.05)',
                 border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                padding: '12px 16px',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                borderRadius: 14, padding: '12px 16px',
+                display: 'flex', flexDirection: 'column', gap: 10,
               }}>
-                <span style={{ fontSize: '0.925rem', fontWeight: 600, color: '#E2E8F0' }}>
-                  通知アラーム
-                </span>
-                <select
-                  value={newAlarm}
-                  onChange={(e) => setNewAlarm(e.target.value)}
-                  style={{
-                    background: 'transparent',
-                    border: 'none',
-                    color: '#94A3B8',
-                    fontSize: '0.9rem',
-                    fontWeight: 600,
-                    outline: 'none',
-                    cursor: 'pointer',
-                    textAlignLast: 'right',
-                  }}
-                >
-                  <option value="none" style={{ background: '#1E293B', color: '#FFF' }}>なし</option>
-                  <option value="10min" style={{ background: '#1E293B', color: '#FFF' }}>10分前</option>
-                  <option value="1hour" style={{ background: '#1E293B', color: '#FFF' }}>1時間前</option>
-                  <option value="1day" style={{ background: '#1E293B', color: '#FFF' }}>1日前</option>
-                </select>
-              </div>
-
-              {/* ── 6. 詳細情報 (場所 / URL / メモ) ── */}
-              <div style={{
-                background: 'rgba(255, 255, 255, 0.05)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                borderRadius: 14,
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 16px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                }}>
-                  <MapPin size={16} color="#64748B" />
+                <div>
+                  <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>場所 / オンライン</label>
                   <input
                     type="text"
+                    placeholder="例: Zoom, Teams, 本社ビル"
                     value={newLocation}
                     onChange={(e) => setNewLocation(e.target.value)}
-                    placeholder="場所 (例: オンラインZoom / 本社ビル)"
                     style={{
-                      width: '100%', background: 'transparent', border: 'none',
-                      outline: 'none', color: '#FFFFFF', fontSize: '0.9rem',
+                      width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                      color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
                     }}
                   />
                 </div>
-
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 16px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
-                }}>
-                  <LinkIcon size={16} color="#64748B" />
+                <div>
+                  <label style={{ fontSize: '0.72rem', color: '#94A3B8', display: 'block', marginBottom: 3 }}>面接URL / マイページリンク</label>
                   <input
-                    type="text"
+                    type="url"
+                    placeholder="https://..."
                     value={newUrl}
                     onChange={(e) => setNewUrl(e.target.value)}
-                    placeholder="URL (面接リンク / マイページ)"
                     style={{
-                      width: '100%', background: 'transparent', border: 'none',
-                      outline: 'none', color: '#FFFFFF', fontSize: '0.9rem',
-                    }}
-                  />
-                </div>
-
-                <div style={{
-                  display: 'flex', alignItems: 'flex-start', gap: 10,
-                  padding: '10px 16px',
-                }}>
-                  <FileText size={16} color="#64748B" style={{ marginTop: 3 }} />
-                  <textarea
-                    value={newMemo}
-                    onChange={(e) => setNewMemo(e.target.value)}
-                    placeholder="メモ"
-                    rows={2}
-                    style={{
-                      width: '100%', background: 'transparent', border: 'none',
-                      outline: 'none', color: '#FFFFFF', fontSize: '0.9rem',
-                      resize: 'none', fontFamily: 'inherit',
+                      width: '100%', background: 'rgba(255, 255, 255, 0.08)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)', borderRadius: 8,
+                      color: '#FFFFFF', padding: '6px 8px', fontSize: '0.82rem', outline: 'none',
                     }}
                   />
                 </div>
               </div>
-
-              {/* Bottom Large Save Button */}
-              <button
-                type="button"
-                onClick={handleAddEvent}
-                style={{
-                  marginTop: 6,
-                  height: 48,
-                  borderRadius: 24,
-                  background: '#E2E8F0',
-                  color: '#0F172A',
-                  fontSize: '0.95rem',
-                  fontWeight: 800,
-                  border: 'none',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.35)',
-                  transition: 'transform 0.15s ease, background 0.15s ease',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#FFFFFF'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = '#E2E8F0'; }}
-              >
-                保存
-              </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* ── Floating Action Button (FAB: ＋ボタン) ── */}
-      <button
-        onClick={() => { setNewDate(selectedDateStr); setShowAddModal(true); }}
-        aria-label="予定を追加"
-        style={{
-          position: 'fixed',
-          bottom: 84,
-          right: 20,
-          width: 54,
-          height: 54,
-          borderRadius: '50%',
-          background: 'linear-gradient(135deg, #334155, #1E293B)',
-          color: '#FFFFFF',
-          border: '1.5px solid rgba(255, 255, 255, 0.18)',
-          boxShadow: '0 6px 20px rgba(0, 0, 0, 0.45)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          cursor: 'pointer',
-          zIndex: 80,
-          transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-        }}
-        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
-        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-      >
-        <Plus size={26} strokeWidth={2.5} />
-      </button>
     </div>
   );
 }

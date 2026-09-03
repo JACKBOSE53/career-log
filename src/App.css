@@ -26,10 +26,20 @@
   width: 100%;
 }
 
+.content-inner-wide {
+  max-width: 1160px;
+}
+
 /* Desktop — no bottom padding needed */
 @media (min-width: 768px) {
   .content-inner {
     padding: 16px 24px 40px;
+  }
+}
+
+@media (max-width: 960px) {
+  .calendar-dashboard-grid {
+    grid-template-columns: 1fr !important;
   }
 }
 
