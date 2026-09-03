@@ -48,8 +48,20 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   };
 
   useEffect(() => {
+    if (!myId) return;
+    const unsub = subscribeToFollowingUids(myId, (uids) => {
+      setFollowingUids(uids);
+    });
+    return () => unsub();
+  }, [myId]);
+
+  // followingUids が確定してから投稿を購読する（'followers'限定投稿のクエリを
+  // 実際にフォロー中のユーザーだけに絞るため、Firestoreのセキュリティルール上必須）
+  const followingUidsKey = followingUids.slice().sort().join(',');
+
+  useEffect(() => {
     setLoading(true);
-    const unsubscribe = subscribeToTimelinePosts(myId, (allPosts) => {
+    const unsubscribe = subscribeToTimelinePosts(myId, followingUids, (allPosts) => {
       latestFirestorePosts.current = allPosts;
       mergeAndSetPosts(allPosts);
     });
@@ -63,15 +75,8 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
       unsubscribe();
       window.removeEventListener('career_log_data_updated', handleAutoUpdate);
     };
-  }, [myId]);
-
-  useEffect(() => {
-    if (!myId) return;
-    const unsub = subscribeToFollowingUids(myId, (uids) => {
-      setFollowingUids(uids);
-    });
-    return () => unsub();
-  }, [myId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [myId, followingUidsKey]);
 
   // ユーザー指示に基づく厳格なプライバシー＆公開範囲サブフィルター
   const filteredPosts = posts.filter((post) => {

@@ -9,6 +9,7 @@ import {
   subscribeToUserProfile,
   subscribeToFollowingState,
   subscribeToFollowRequestState,
+  subscribeToFollowingUids,
   type UserProfile,
   type FirestorePost,
 } from '../db/firestore';
@@ -27,13 +28,23 @@ export default function SearchSection({ onUpdate, onProfileClick }: SearchSectio
   const [allPosts, setAllPosts] = useState<FirestorePost[]>([]);
   const [results, setResults] = useState<{ posts: FirestorePost[]; users: UserProfile[] } | null>(null);
   const [tab, setTab] = useState<'posts' | 'users'>('posts');
+  const [followingUids, setFollowingUids] = useState<string[]>([]);
 
   useEffect(() => {
-    const unsubPosts = subscribeToTimelinePosts(currentUser?.uid, setAllPosts);
+    if (!currentUser?.uid) return;
+    const unsub = subscribeToFollowingUids(currentUser.uid, setFollowingUids);
+    return () => unsub();
+  }, [currentUser]);
+
+  const followingUidsKey = followingUids.slice().sort().join(',');
+
+  useEffect(() => {
+    const unsubPosts = subscribeToTimelinePosts(currentUser?.uid, followingUids, setAllPosts);
     return () => {
       unsubPosts();
     };
-  }, [currentUser]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, followingUidsKey]);
 
   async function handleSearch(q: string) {
     setQuery(q);

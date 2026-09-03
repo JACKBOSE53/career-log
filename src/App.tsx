@@ -20,29 +20,7 @@ import ToastNotification, { type ToastState } from './components/ToastNotificati
 export default function App() {
   const { currentUser, profile, loading, logout } = useAuth();
 
-  // ── 認証ローディング中 ──────────────────────────────────────
-  if (loading) {
-    return (
-      <div style={{
-        minHeight: '100vh', background: '#0B0F17',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}>
-        <div style={{
-          width: '44px', height: '44px', borderRadius: '50%',
-          border: '3px solid #26334D', borderTopColor: '#E06D53',
-          animation: 'spin 0.8s linear infinite',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
-
-  // ── 未ログイン ────────────────────────────────────────────────
-  if (!currentUser) return <LoginPage />;
-
-  // ── プロフィール未設定（オンボーディング） ──────────────────
-  if (!currentUser.displayName || !profile) return <OnboardingPage />;
-
+  // ── Hooksは早期returnより前に、常に同じ順序で呼び出す ──────
   const [currentPage, setCurrentPage] = useState<Page>('home');
   const [profileUserId, setProfileUserId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -98,6 +76,33 @@ export default function App() {
     setTick((t) => t + 1);
   }, []);
 
+  const triggerToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ show: true, message, type });
+  }, []);
+
+  // ── 認証ローディング中 ──────────────────────────────────────
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: '100vh', background: '#0B0F17',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          width: '44px', height: '44px', borderRadius: '50%',
+          border: '3px solid #26334D', borderTopColor: '#E06D53',
+          animation: 'spin 0.8s linear infinite',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  // ── 未ログイン ────────────────────────────────────────────────
+  if (!currentUser) return <LoginPage />;
+
+  // ── プロフィール未設定（オンボーディング） ──────────────────
+  if (!currentUser.displayName || !profile) return <OnboardingPage />;
+
   function handleNavigate(page: Page) {
     setCurrentPage(page);
     setProfileUserId(null);
@@ -107,10 +112,6 @@ export default function App() {
     setProfileUserId(userId);
     setCurrentPage('profile');
   }
-
-  const triggerToast = useCallback((message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ show: true, message, type });
-  }, []);
 
   function handlePostCreated() {
     setShowCreateModal(false);

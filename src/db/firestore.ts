@@ -598,8 +598,30 @@ function getMillis(dateVal: Timestamp | Date | string | number | { toDate?: () =
   return new Date(dateVal as string | number).getTime() || 0;
 }
 
+// Firestoreの 'in' フィルタは一度に指定できる値の数に上限があるため、分割して複数クエリにする
+const FIRESTORE_IN_LIMIT = 30;
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+function mapPostSnapshot(snapshot: import('firebase/firestore').QuerySnapshot): FirestorePost[] {
+  return snapshot.docs.map(doc => {
+    const data = doc.data();
+    const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
+    return { ...data, id: doc.id, createdAt: date };
+  }) as FirestorePost[];
+}
+
 export function subscribeToTimelinePosts(
   currentUserId: string | undefined,
+  // 実際にフォロー中のユーザーIDリスト。'followers'限定投稿はこのリストに含まれる
+  // ユーザーのものだけをクエリする（セキュリティルールがフォロー関係を検証するため、
+  // フォローしていないユーザーの'followers'投稿を含む幅広いクエリは拒否される）
+  followingUids: string[],
   callback: (posts: FirestorePost[]) => void
 ) {
   const postsCollection = collection(db, 'posts');
@@ -618,12 +640,7 @@ export function subscribeToTimelinePosts(
   // 1. 全体公開 (public)
   const qPublic = query(postsCollection, where('visibility', '==', 'public'));
   const unsubPublic = onSnapshot(qPublic, (snapshot) => {
-    const posts = snapshot.docs.map(doc => {
-      const data = doc.data();
-      const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-      return { ...data, id: doc.id, createdAt: date };
-    }) as FirestorePost[];
-    resultsMap.set('public', posts);
+    resultsMap.set('public', mapPostSnapshot(snapshot));
     triggerMerge();
   }, (err) => {
     console.warn('subscribeToTimelinePosts public error:', err);
@@ -636,12 +653,7 @@ export function subscribeToTimelinePosts(
     // 2. 自分の全投稿
     const qMine = query(postsCollection, where('userId', '==', currentUserId));
     const unsubMine = onSnapshot(qMine, (snapshot) => {
-      const posts = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-        return { ...data, id: doc.id, createdAt: date };
-      }) as FirestorePost[];
-      resultsMap.set('mine', posts);
+      resultsMap.set('mine', mapPostSnapshot(snapshot));
       triggerMerge();
     }, (err) => {
       console.warn('subscribeToTimelinePosts mine error:', err);
@@ -650,22 +662,28 @@ export function subscribeToTimelinePosts(
     });
     unsubscribes.push(unsubMine);
 
-    // 3. 友達限定 (followers) 投稿
-    const qFollowers = query(postsCollection, where('visibility', '==', 'followers'));
-    const unsubFollowers = onSnapshot(qFollowers, (snapshot) => {
-      const posts = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const date = data.createdAt?.toDate ? data.createdAt.toDate() : new Date();
-        return { ...data, id: doc.id, createdAt: date };
-      }) as FirestorePost[];
-      resultsMap.set('followers', posts);
-      triggerMerge();
-    }, (err) => {
-      console.warn('subscribeToTimelinePosts followers error:', err);
-      resultsMap.set('followers', []);
-      triggerMerge();
+    // 3. フォロー中ユーザーの「友達限定 (followers)」投稿
+    // 自分が実際にフォローしているユーザーIDだけに絞ってクエリする
+    const followedOnly = followingUids.filter((uid) => uid && uid !== currentUserId);
+    const chunks = chunkArray(followedOnly, FIRESTORE_IN_LIMIT);
+    chunks.forEach((chunk, idx) => {
+      if (chunk.length === 0) return;
+      const key = `followers-${idx}`;
+      const qFollowers = query(
+        postsCollection,
+        where('userId', 'in', chunk),
+        where('visibility', '==', 'followers')
+      );
+      const unsub = onSnapshot(qFollowers, (snapshot) => {
+        resultsMap.set(key, mapPostSnapshot(snapshot));
+        triggerMerge();
+      }, (err) => {
+        console.warn(`subscribeToTimelinePosts followers[${idx}] error:`, err);
+        resultsMap.set(key, []);
+        triggerMerge();
+      });
+      unsubscribes.push(unsub);
     });
-    unsubscribes.push(unsubFollowers);
   }
 
   return () => {

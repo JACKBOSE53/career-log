@@ -18,6 +18,20 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/follows/$(followId));
     }
 
+    // 投稿データ(post)を渡して、閲覧者が読める投稿かどうかを判定する
+    //  - 投稿者本人 → 常に読める
+    //  - visibility == 'public' → サインイン済みなら誰でも読める
+    //  - visibility == 'followers' もしくは未設定 → フォロワーのみ読める
+    //  - visibility == 'private'（それ以外の値含む） → 投稿者本人のみ
+    function canReadPostData(post) {
+      return post.userId == request.auth.uid ||
+        post.visibility == 'public' ||
+        (
+          (!('visibility' in post) || post.visibility == 'followers') &&
+          isFollowerOf(post.userId)
+        );
+    }
+
     // ─── users コレクション ───────────────────────────────────────────
     match /users/{uid} {
       allow read: if isSignedIn();
@@ -55,7 +69,11 @@ service cloud.firestore {
 
     // ─── posts コレクション ───────────────────────────────────────────
     match /posts/{postId} {
-      allow read: if isSignedIn();
+      // 投稿の公開範囲(visibility)を実際に強制する:
+      //  - public          → サインイン済みなら誰でも閲覧可
+      //  - followers / 未設定 → 投稿者本人 + 投稿者をフォロー済みの人のみ
+      //  - private         → 投稿者本人のみ
+      allow read: if isSignedIn() && canReadPostData(resource.data);
 
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
 
@@ -83,7 +101,8 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {
-        allow read: if isSignedIn();
+        // コメントも親投稿と同じ公開範囲ルールに従う（親投稿を読めない人はコメントも読めない）
+        allow read: if isSignedIn() && canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
         allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
         allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       }
