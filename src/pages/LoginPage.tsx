@@ -1,12 +1,16 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import LegalModal from '../components/LegalModal';
 
 type Tab = 'login' | 'signup';
 
 export default function LoginPage() {
   const { login, signup } = useAuth();
   const [tab, setTab] = useState<Tab>('login');
+
+  // ── 規約モーダル状態 ───────────────────────────────────────
+  const [legalModalType, setLegalModalType] = useState<'terms' | 'privacy' | null>(null);
 
   // ── ログインフォーム状態 ──────────────────────────────────────
   const [loginEmail, setLoginEmail] = useState('');
@@ -241,10 +245,24 @@ export default function LoginPage() {
           )}
         </div>
 
-        <p style={{ textAlign: 'center', color: '#64748B', fontSize: '12px', marginTop: '24px' }}>
-          © 2025 CareerLog. All rights reserved.
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: '20px', fontSize: '12px', color: '#64748B' }}>
+          <button type="button" onClick={() => setLegalModalType('terms')} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', textDecoration: 'underline' }}>
+            利用規約
+          </button>
+          <span>•</span>
+          <button type="button" onClick={() => setLegalModalType('privacy')} style={{ background: 'none', border: 'none', color: '#64748B', cursor: 'pointer', textDecoration: 'underline' }}>
+            プライバシーポリシー
+          </button>
+        </div>
+
+        <p style={{ textAlign: 'center', color: '#64748B', fontSize: '12px', marginTop: '8px' }}>
+          © 2026 CareerLog. All rights reserved.
         </p>
       </div>
+
+      {legalModalType && (
+        <LegalModal type={legalModalType} onClose={() => setLegalModalType(null)} />
+      )}
     </div>
   );
 }

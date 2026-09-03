@@ -26,5 +26,9 @@
       "@firebase/util": true,
       "protobufjs": true
     }
+  },
+  "allow-scripts": {
+    "@firebase/util": true,
+    "protobufjs": true
   }
 }

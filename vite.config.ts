@@ -2,12 +2,15 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   build: {
-    chunkSizeWarningLimit: 600,
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks(id) {
-          if (id.includes('node_modules/firebase')) {
-            return 'vendor-firebase';
+          if (id.includes('node_modules/@firebase/firestore') || id.includes('node_modules/firebase/firestore')) {
+            return 'vendor-firebase-firestore';
+          }
+          if (id.includes('node_modules/firebase') || id.includes('node_modules/@firebase')) {
+            return 'vendor-firebase-core';
           }
           if (id.includes('node_modules/lucide-react')) {
             return 'vendor-icons';
