@@ -53,7 +53,10 @@ service cloud.firestore {
 
       match /notifications/{notifId} {
         allow read, update, delete: if isOwner(uid);
-        allow create: if isSignedIn();
+        allow create: if isSignedIn() &&
+          request.resource.data.fromUid == request.auth.uid &&
+          request.resource.data.userId == uid &&
+          request.resource.data.type in ['like', 'comment', 'follow_accept', 'follow_request'];
       }
 
       match /following/{targetUid} {
@@ -101,9 +104,11 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {
-        // コメントも親投稿と同じ公開範囲ルールに従う（親投稿を読めない人はコメントも読めない）
+        // コメントも親投稿と同じ公開範囲ルールに従う（親投稿を読めない人はコメントの閲覧・投稿もできない）
         allow read: if isSignedIn() && canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
-        allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+        allow create: if isSignedIn() &&
+          request.resource.data.userId == request.auth.uid &&
+          canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
         allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
       }
     }
