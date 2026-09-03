@@ -19,5 +19,11 @@
     "lucide-react": "^1.28.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8"
+  },
+  "lavamoat": {
+    "allowScripts": {
+      "@firebase/util": true,
+      "protobufjs": true
+    }
   }
 }
