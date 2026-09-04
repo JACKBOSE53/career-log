@@ -15,6 +15,8 @@ import {
   unfollowUser,
   subscribeToFollowingState,
   subscribeToFollowRequestState,
+  getFollowersCount,
+  getFollowingCount,
   type FirestorePost,
 } from '../db/firestore';
 import PostCard from './PostCard';
@@ -35,15 +37,36 @@ interface ProfileViewProps {
 }
 
 export default function ProfileView({ userId, onClose, onUpdate, onToast }: ProfileViewProps) {
-  const { profile: user, loading: userLoading } = useUserProfile(userId);
   const { currentUser, profile: myProfile } = useAuth();
+  const isMe = !userId || userId === currentUser?.uid || userId === 'user-me';
+  const { profile: user, loading: userLoading } = useUserProfile(userId, isMe);
   const [posts, setPosts] = useState<FirestorePost[]>([]);
   const [following, setFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
   const [requestSent, setRequestSent] = useState(false);
   const [showUnfollowConfirm, setShowUnfollowConfirm] = useState(false);
-  const isMe = !userId || userId === currentUser?.uid || userId === 'user-me';
   const effectiveTargetUid = isMe ? (currentUser?.uid || userId || 'user-me') : userId;
+
+  // フォロワー数・フォロー中数（follows コレクションの集計。増減は操作後に再取得する）
+  const [followCounts, setFollowCounts] = useState({ followers: 0, following: 0 });
+
+  const refetchFollowCounts = async (uid: string) => {
+    try {
+      const [followers, following] = await Promise.all([
+        getFollowersCount(uid),
+        getFollowingCount(uid),
+      ]);
+      setFollowCounts({ followers, following });
+    } catch (e) {
+      console.warn('Failed to fetch follow counts:', e);
+    }
+  };
+
+  useEffect(() => {
+    if (!effectiveTargetUid) return;
+    refetchFollowCounts(effectiveTargetUid);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveTargetUid]);
 
   // 規約・ポリシーモーダル
   const [legalModalType, setLegalModalType] = useState<'terms' | 'privacy' | null>(null);
@@ -140,6 +163,7 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       if (res.directlyFollowed) {
         setFollowing(true);
         onToast?.('フォローしました！', 'success');
+        refetchFollowCounts(effectiveTargetUid);
       } else {
         if (res.error) {
           onToast?.('直接フォロー失敗: ' + res.error, 'error');
@@ -166,6 +190,7 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
       setFollowing(false);
       setRequestSent(false);
       onToast?.('フォローを解除しました', 'success');
+      refetchFollowCounts(effectiveTargetUid);
       onUpdate();
     } catch (e) {
       console.error(e);
@@ -594,10 +619,10 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
                 </span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '0.8125rem', marginLeft: 4 }}>
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{(user.followingCount || 0).toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロー中</span>
+                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{followCounts.following.toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロー中</span>
                   </span>
                   <span style={{ color: 'var(--text-secondary)' }}>
-                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{(user.followersCount || 0).toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロワー</span>
+                    <strong style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{followCounts.followers.toLocaleString()}</strong> <span style={{ color: 'var(--text-muted)' }}>フォロワー</span>
                   </span>
                 </span>
               </div>
