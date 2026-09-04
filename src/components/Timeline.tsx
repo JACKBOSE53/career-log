@@ -39,6 +39,7 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   const myId = currentUser?.uid;
 
   const latestFirestorePosts = useRef<FirestorePost[]>([]);
+  const hasPaginatedRef = useRef<boolean>(false);
 
   const mergeAndSetPosts = (firestorePosts: FirestorePost[]) => {
     const currentLocals = getLocalPosts();
@@ -74,13 +75,26 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   useEffect(() => {
     setLoading(true);
     setHasMore(true);
+    hasPaginatedRef.current = false;
+
     const unsubscribe = subscribeToTimelinePosts(myId, followingUids, (allPosts, lastDoc) => {
-      latestFirestorePosts.current = allPosts;
-      setLastPublicDoc(lastDoc);
-      if (!lastDoc) {
-        setHasMore(false);
+      // 修正点1: 過去にページングで読み込んだ投稿を消さないよう、idベースで既存データとマージ
+      const map = new Map<string, FirestorePost>();
+      latestFirestorePosts.current.forEach((p) => { if (p.id) map.set(p.id, p); });
+      allPosts.forEach((p) => { if (p.id) map.set(p.id, p); });
+      const merged = Array.from(map.values());
+      latestFirestorePosts.current = merged;
+
+      // 修正点2: ページングを一度も呼んでいない時だけリアルタイム側のカーソルを採用
+      // （ページング済みの場合は、ユーザーが読み進めた最深部のカーソルを保護・維持する）
+      if (!hasPaginatedRef.current) {
+        setLastPublicDoc(lastDoc);
+        if (!lastDoc) {
+          setHasMore(false);
+        }
       }
-      mergeAndSetPosts(allPosts);
+
+      mergeAndSetPosts(merged);
     });
 
     const handleAutoUpdate = () => {
@@ -98,6 +112,8 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   const handleLoadMore = async () => {
     if (!lastPublicDoc || loadingOlder || !hasMore) return;
     setLoadingOlder(true);
+    hasPaginatedRef.current = true; // ページング実行フラグをONにし、リアルタイム巻き戻しを防止
+
     try {
       const res = await fetchOlderPublicPosts(lastPublicDoc, TIMELINE_PAGE_SIZE);
       if (res.posts.length === 0 || !res.lastDoc) {
