@@ -11,10 +11,12 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
   onSnapshot,
   serverTimestamp,
   increment,
   Timestamp,
+  type QueryDocumentSnapshot,
   arrayUnion,
   arrayRemove,
   writeBatch,
@@ -616,17 +618,20 @@ function mapPostSnapshot(snapshot: import('firebase/firestore').QuerySnapshot): 
   }) as FirestorePost[];
 }
 
+export const TIMELINE_PAGE_SIZE = 30;
+
 export function subscribeToTimelinePosts(
   currentUserId: string | undefined,
   // 実際にフォロー中のユーザーIDリスト。'followers'限定投稿はこのリストに含まれる
   // ユーザーのものだけをクエリする（セキュリティルールがフォロー関係を検証するため、
   // フォローしていないユーザーの'followers'投稿を含む幅広いクエリは拒否される）
   followingUids: string[],
-  callback: (posts: FirestorePost[]) => void
+  callback: (posts: FirestorePost[], lastPublicDoc?: QueryDocumentSnapshot) => void
 ) {
   const postsCollection = collection(db, 'posts');
   const unsubscribes: (() => void)[] = [];
   const resultsMap = new Map<string, FirestorePost[]>();
+  let lastPublicDocSnapshot: QueryDocumentSnapshot | undefined = undefined;
 
   const triggerMerge = () => {
     const allPostsMap = new Map<string, FirestorePost>();
@@ -634,12 +639,18 @@ export function subscribeToTimelinePosts(
       postsList.forEach((p) => { if (p.id) allPostsMap.set(p.id, p); });
     });
     const merged = Array.from(allPostsMap.values()).sort((a, b) => getMillis(b.createdAt) - getMillis(a.createdAt));
-    callback(merged);
+    callback(merged, lastPublicDocSnapshot);
   };
 
-  // 1. 全体公開 (public)
-  const qPublic = query(postsCollection, where('visibility', '==', 'public'));
+  // 1. 全体公開 (public): 最新30件に絞り込み、初回読み取りコストを固定化
+  const qPublic = query(
+    postsCollection,
+    where('visibility', '==', 'public'),
+    orderBy('createdAt', 'desc'),
+    limit(TIMELINE_PAGE_SIZE)
+  );
   const unsubPublic = onSnapshot(qPublic, (snapshot) => {
+    lastPublicDocSnapshot = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : undefined;
     resultsMap.set('public', mapPostSnapshot(snapshot));
     triggerMerge();
   }, (err) => {
@@ -650,8 +661,13 @@ export function subscribeToTimelinePosts(
   unsubscribes.push(unsubPublic);
 
   if (currentUserId) {
-    // 2. 自分の全投稿
-    const qMine = query(postsCollection, where('userId', '==', currentUserId));
+    // 2. 自分の全投稿: 直近30件を取得
+    const qMine = query(
+      postsCollection,
+      where('userId', '==', currentUserId),
+      orderBy('createdAt', 'desc'),
+      limit(TIMELINE_PAGE_SIZE)
+    );
     const unsubMine = onSnapshot(qMine, (snapshot) => {
       resultsMap.set('mine', mapPostSnapshot(snapshot));
       triggerMerge();
@@ -689,6 +705,31 @@ export function subscribeToTimelinePosts(
   return () => {
     unsubscribes.forEach(unsub => unsub());
   };
+}
+
+/**
+ * 過去の全体公開投稿を一括ページング取得（getDocs で1回取得し、リスナーを増やさない）
+ */
+export async function fetchOlderPublicPosts(
+  lastDoc: QueryDocumentSnapshot,
+  pageSize = TIMELINE_PAGE_SIZE
+): Promise<{ posts: FirestorePost[]; lastDoc: QueryDocumentSnapshot | undefined }> {
+  try {
+    const q = query(
+      collection(db, 'posts'),
+      where('visibility', '==', 'public'),
+      orderBy('createdAt', 'desc'),
+      startAfter(lastDoc),
+      limit(pageSize)
+    );
+    const snapshot = await getDocs(q);
+    const posts = mapPostSnapshot(snapshot);
+    const newLastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : undefined;
+    return { posts, lastDoc: newLastDoc };
+  } catch (error) {
+    console.error('fetchOlderPublicPosts error:', error);
+    throw error;
+  }
 }
 
 export function formatFirestoreDateLocal(date: Timestamp | Date | string | number | { toDate?: () => Date } | null | undefined): string {

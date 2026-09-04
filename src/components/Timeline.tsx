@@ -1,6 +1,14 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react';
-import { Plus, RefreshCw, Users, Globe, Timer } from 'lucide-react';
-import { subscribeToTimelinePosts, getLocalPosts, subscribeToFollowingUids, type FirestorePost } from '../db/firestore';
+import { Plus, RefreshCw, Users, Globe, Timer, ChevronDown, Loader2 } from 'lucide-react';
+import {
+  subscribeToTimelinePosts,
+  getLocalPosts,
+  subscribeToFollowingUids,
+  fetchOlderPublicPosts,
+  TIMELINE_PAGE_SIZE,
+  type FirestorePost,
+} from '../db/firestore';
+import type { QueryDocumentSnapshot } from 'firebase/firestore';
 import { isFollowing } from '../db/store';
 import { useAuth } from '../contexts/AuthContext';
 import PostCard from './PostCard';
@@ -24,6 +32,9 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
   const [showTimerModal, setShowTimerModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [followingUids, setFollowingUids] = useState<string[]>([]);
+  const [lastPublicDoc, setLastPublicDoc] = useState<QueryDocumentSnapshot | undefined>(undefined);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
   const { currentUser } = useAuth();
   const myId = currentUser?.uid;
 
@@ -62,8 +73,13 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
 
   useEffect(() => {
     setLoading(true);
-    const unsubscribe = subscribeToTimelinePosts(myId, followingUids, (allPosts) => {
+    setHasMore(true);
+    const unsubscribe = subscribeToTimelinePosts(myId, followingUids, (allPosts, lastDoc) => {
       latestFirestorePosts.current = allPosts;
+      setLastPublicDoc(lastDoc);
+      if (!lastDoc) {
+        setHasMore(false);
+      }
       mergeAndSetPosts(allPosts);
     });
 
@@ -78,6 +94,28 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [myId, followingUidsKey]);
+
+  const handleLoadMore = async () => {
+    if (!lastPublicDoc || loadingOlder || !hasMore) return;
+    setLoadingOlder(true);
+    try {
+      const res = await fetchOlderPublicPosts(lastPublicDoc, TIMELINE_PAGE_SIZE);
+      if (res.posts.length === 0 || !res.lastDoc) {
+        setHasMore(false);
+      }
+      setLastPublicDoc(res.lastDoc);
+      const combined = [...latestFirestorePosts.current, ...res.posts];
+      latestFirestorePosts.current = combined;
+      mergeAndSetPosts(combined);
+    } catch (err) {
+      console.error('Failed to load older posts:', err);
+      if (onToast) {
+        onToast('過去の投稿の取得に失敗しました', 'error');
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
 
   // ユーザー指示に基づく厳格なプライバシー＆公開範囲サブフィルター
   const filteredPosts = posts.filter((post) => {
@@ -264,6 +302,37 @@ export default function Timeline({ onUpdate, onProfileClick, onToast }: Timeline
             />
           </div>
         ))
+      )}
+
+      {/* Pagination Load More */}
+      {feedTab === 'everyone' && hasMore && lastPublicDoc && (
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 24, marginBottom: 32 }}>
+          <button
+            onClick={handleLoadMore}
+            disabled={loadingOlder}
+            className="btn btn-secondary"
+            style={{
+              padding: '10px 24px',
+              borderRadius: 99,
+              fontSize: '0.875rem',
+              fontWeight: 600,
+              gap: 8,
+              cursor: loadingOlder ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {loadingOlder ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                <span>読み込み中...</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown size={16} />
+                <span>もっと見る（過去の投稿を読み込む）</span>
+              </>
+            )}
+          </button>
+        </div>
       )}
 
       {/* Modal with Suspense */}
