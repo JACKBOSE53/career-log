@@ -1,9 +1,22 @@
 rules_version = '2';
 
+// ═══════════════════════════════════════════════════════════════════════════
+// career-log Firestore Security Rules （修正版）
+//
+// 【設計上の絶対原則】
+//   1. ドキュメントIDは攻撃者が自由に指定できる。
+//      exists() / get() でドキュメントの存在を根拠に権限を与える場合、
+//      そのドキュメントの「IDと中身の整合性」を create ルールで必ず検証する。
+//   2. 認証済み全員への read 開放（allow read: if isSignedIn()）は、
+//      そのコレクションが「全件ダウンロードされてよい」場合のみ許される。
+//   3. 個人情報（email 等）と公開プロフィールは別コレクションに分ける。
+//      Firestoreルールはフィールド単位の読み取り制限ができないため。
+// ═══════════════════════════════════════════════════════════════════════════
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─── 共通ヘルパー ──────────────────────────────────────────────────
+    // ─── 共通ヘルパー ────────────────────────────────────────────────────
     function isSignedIn() {
       return request.auth != null;
     }
@@ -12,87 +25,182 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
-    // 閲覧者が対象ユーザーをフォロー済みか確認
-    function isFollowerOf(targetUid) {
-      let followId = request.auth.uid + '_' + targetUid;
-      return exists(/databases/$(database)/documents/follows/$(followId));
+    // メール確認済みかどうか。
+    // TODO(Step2): sendEmailVerification() をクライアントに実装したら、
+    //   publicProfiles / posts の read 条件を isSignedIn() から isVerified() に
+    //   差し替えること。捨てアドによる大量スクレイピングへの防御になる。
+    //   既存ユーザーがロックアウトされるため、実装完了までは有効化しない。
+    function isVerified() {
+      return isSignedIn() && request.auth.token.email_verified == true;
     }
 
-    // 投稿データ(post)を渡して、閲覧者が読める投稿かどうかを判定する
-    //  - 投稿者本人 → 常に読める
-    //  - visibility == 'public' → サインイン済みなら誰でも読める
-    //  - visibility == 'followers' もしくは未設定 → フォロワーのみ読める
-    //  - visibility == 'private'（それ以外の値含む） → 投稿者本人のみ
+    // 閲覧者が対象ユーザーをフォロー済みか。
+    // ★ follows の create ルールでIDと中身の整合性を検証しているため、
+    //    ここでの exists() は信頼できる。create ルールを緩めると即座に破綻する。
+    function isFollowerOf(targetUid) {
+      return exists(
+        /databases/$(database)/documents/follows/$(request.auth.uid + '_' + targetUid)
+      );
+    }
+
+    // 公開プロフィールに載せてよい内容かを検証する。
+    // email が紛れ込むのを構造的に防ぐ（分離の意味が失われるため）
+    function isValidPublicProfile(d) {
+      return d.get('profileVisibility', 'followers')
+               in ['public', 'followers', 'private'] &&
+        d.name is string &&
+        d.name.size() <= 50 &&
+        d.get('bio', '').size() <= 500 &&
+        !('email' in d);
+    }
+
+    function isPublicAccount(uid) {
+      return get(/databases/$(database)/documents/publicProfiles/$(uid))
+               .data.get('profileVisibility', 'followers') == 'public';
+    }
+
+    // 投稿データを渡して、閲覧者が読める投稿かどうかを判定する
+    //  - 投稿者本人            → 常に読める
+    //  - visibility == 'public'    → サインイン済みなら誰でも読める
+    //  - visibility == 'followers' / 未設定 → フォロワーのみ
+    //  - visibility == 'private'（その他の値も含む） → 投稿者本人のみ
     function canReadPostData(post) {
       return post.userId == request.auth.uid ||
-        post.visibility == 'public' ||
+        post.get('visibility', 'followers') == 'public' ||
         (
-          (!('visibility' in post) || post.visibility == 'followers') &&
+          post.get('visibility', 'followers') == 'followers' &&
           isFollowerOf(post.userId)
         );
     }
 
-    // ─── users コレクション ───────────────────────────────────────────
+    // ═══ users コレクション（非公開・本人のみ） ═════════════════════════
+    // email など個人情報はここに置く。他人からは一切読めない。
     match /users/{uid} {
-      allow read: if isSignedIn();
+      allow read: if isOwner(uid);
       allow create: if isOwner(uid);
-      allow update: if isOwner(uid) || (
-        isSignedIn() &&
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['followersCount', 'followingCount']) &&
-        (
-          !request.resource.data.diff(resource.data).affectedKeys().contains('followersCount') ||
-          request.resource.data.followersCount == resource.data.get('followersCount', 0) + 1 ||
-          request.resource.data.followersCount == resource.data.get('followersCount', 0) - 1
-        ) && (
-          !request.resource.data.diff(resource.data).affectedKeys().contains('followingCount') ||
-          request.resource.data.followingCount == resource.data.get('followingCount', 0) + 1 ||
-          request.resource.data.followingCount == resource.data.get('followingCount', 0) - 1
-        )
-      );
+      allow update: if isOwner(uid);
       allow delete: if false;
 
+      // ─── 通知 ───
       match /notifications/{notifId} {
         allow read, update, delete: if isOwner(uid);
+
+        // 他人が作れるのは「自分名義の、決められた種別の通知」だけ。
+        // content を自由記述のまま放置すると、通知欄が
+        // フィッシング文面の投函口になるため長さと型を制限する。
         allow create: if isSignedIn() &&
+          uid != request.auth.uid &&
           request.resource.data.fromUid == request.auth.uid &&
           request.resource.data.userId == uid &&
-          request.resource.data.type in ['like', 'comment', 'follow_accept', 'follow_request'];
+          request.resource.data.type in ['like', 'comment', 'follow_accept', 'follow_request'] &&
+          request.resource.data.read == false &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.fromName is string &&
+          request.resource.data.fromName.size() <= 50 &&
+          (
+            !('content' in request.resource.data) ||
+            (
+              request.resource.data.content is string &&
+              request.resource.data.content.size() <= 200
+            )
+          );
       }
 
+      // ─── 自分宛のフォローリクエスト（サブコレクション） ───
+      // 旧ルールにはこのパスの match が存在せず、常に暗黙DENYだった。
+      // （firestore.ts の try/catch で握り潰されトップレベルにフォールバックしていた）
+      // ドキュメントIDは申請者のUIDで固定する。
+      match /followRequests/{fromUid} {
+        allow read: if isOwner(uid) || isOwner(fromUid);
+        allow create: if isOwner(fromUid) &&
+          uid != fromUid &&
+          request.resource.data.fromUid == fromUid &&
+          request.resource.data.toUid == uid &&
+          request.resource.data.status == 'pending';
+        // 承認/却下できるのは受け取った本人だけ
+        allow update: if isOwner(uid) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          request.resource.data.status in ['accepted', 'rejected'];
+        allow delete: if isOwner(uid) || isOwner(fromUid);
+      }
+
+      // ─── フォロー関係のミラー（表示用キャッシュ） ───
+      // 権限判定には一切使わない。判定は必ず follows コレクションで行う。
       match /following/{targetUid} {
         allow read: if isSignedIn();
-        allow write: if isOwner(uid) || isOwner(targetUid);
+        allow write: if isOwner(uid);
       }
 
       match /followers/{followerUid} {
         allow read: if isSignedIn();
-        allow write: if isOwner(uid) || isOwner(followerUid);
+        allow write: if isOwner(uid);
       }
     }
 
-    // ─── posts コレクション ───────────────────────────────────────────
+    // ═══ publicProfiles コレクション（公開プロフィール） ═════════════════
+    // 他ユーザーに見せてよい項目のみを置く。email は絶対に入れないこと。
+    // name / avatar / university / grade / targetIndustry / bio / profileVisibility
+    match /publicProfiles/{uid} {
+      allow read: if isSignedIn();
+
+      // create と update を分ける。create 時は resource == null のため、
+      // resource.data を参照する diff() を書くとルール評価が失敗する。
+      allow create: if isOwner(uid) &&
+        isValidPublicProfile(request.resource.data) &&
+        !request.resource.data.keys().hasAny(['followersCount', 'followingCount']);
+
+      allow update: if isOwner(uid) &&
+        isValidPublicProfile(request.resource.data) &&
+        // カウンタは集計クエリ / Cloud Functions の責務。
+        // クライアントからは書き込ませない（改ざん経路を根絶する）
+        !request.resource.data.diff(resource.data)
+           .affectedKeys().hasAny(['followersCount', 'followingCount']);
+
+      allow delete: if false;
+    }
+
+    // ═══ posts コレクション ═════════════════════════════════════════════
     match /posts/{postId} {
-      // 投稿の公開範囲(visibility)を実際に強制する:
-      //  - public          → サインイン済みなら誰でも閲覧可
-      //  - followers / 未設定 → 投稿者本人 + 投稿者をフォロー済みの人のみ
-      //  - private         → 投稿者本人のみ
       allow read: if isSignedIn() && canReadPostData(resource.data);
 
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      // 作成時にサイズと初期値を検証する。
+      // 制限が無いと1ドキュメント最大1MiBを無限に書き込める（コスト攻撃）。
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.createdAt == request.time &&
+        request.resource.data.title is string &&
+        request.resource.data.title.size() <= 200 &&
+        request.resource.data.content is string &&
+        request.resource.data.content.size() <= 5000 &&
+        request.resource.data.get('visibility', 'followers')
+          in ['public', 'followers', 'private'] &&
+        request.resource.data.get('tags', []).size() <= 20 &&
+        request.resource.data.likesCount == 0 &&
+        request.resource.data.commentsCount == 0 &&
+        request.resource.data.get('likedUserIds', []).size() == 0;
 
       allow update: if isSignedIn() && (
-        resource.data.userId == request.auth.uid ||
+        (
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.userId == resource.data.userId &&
+          request.resource.data.get('content', '').size() <= 5000 &&
+          request.resource.data.get('title', '').size() <= 200
+        ) ||
         isValidLikeToggle()
       );
 
+      // いいねは「自分のUIDが1件だけ増減し、likesCount が配列長と一致する」場合のみ許可
       function isValidLikeToggle() {
         let beforeIds = resource.data.get('likedUserIds', []);
         let afterIds = request.resource.data.get('likedUserIds', []);
         let uid = request.auth.uid;
 
         return isSignedIn() &&
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likedUserIds', 'likesCount']) &&
+          canReadPostData(resource.data) &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['likedUserIds', 'likesCount']) &&
           request.resource.data.likesCount == afterIds.size() &&
+          afterIds.size() <= 100000 &&
           (
             (afterIds.size() == beforeIds.size() + 1 &&
               afterIds.toSet().difference(beforeIds.toSet()) == [uid].toSet()) ||
@@ -104,56 +212,120 @@ service cloud.firestore {
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
 
       match /comments/{commentId} {
-        // コメントも親投稿と同じ公開範囲ルールに従う（親投稿を読めない人はコメントの閲覧・投稿もできない）
-        allow read: if isSignedIn() && canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
+        allow read: if isSignedIn() &&
+          canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
+
         allow create: if isSignedIn() &&
           request.resource.data.userId == request.auth.uid &&
+          request.resource.data.createdAt == request.time &&
+          request.resource.data.content is string &&
+          request.resource.data.content.size() <= 1000 &&
           canReadPostData(get(/databases/$(database)/documents/posts/$(postId)).data);
-        allow update, delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+        allow update: if isSignedIn() &&
+          resource.data.userId == request.auth.uid &&
+          request.resource.data.get('content', '').size() <= 1000;
+
+        allow delete: if isSignedIn() && (
+          resource.data.userId == request.auth.uid ||
+          get(/databases/$(database)/documents/posts/$(postId)).data.userId == request.auth.uid
+        );
       }
     }
 
-    // ─── calendarEvents コレクション ──────────────────────────────────
+    // ═══ calendarEvents コレクション（完全プライベート） ═════════════════
     match /calendarEvents/{eventId} {
       allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn() &&
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.get('title', '').size() <= 200;
+      allow update: if isSignedIn() &&
+        resource.data.userId == request.auth.uid &&
+        request.resource.data.userId == request.auth.uid;
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
     }
 
-    // ─── weeklyGoals コレクション ─────────────────────────────────────
+    // ═══ weeklyGoals コレクション ═══════════════════════════════════════
     match /weeklyGoals/{uid} {
       allow read, write: if isOwner(uid);
     }
 
-    // ─── followRequests コレクション ──────────────────────────────────
+    // ═══ followRequests コレクション（トップレベル） ═════════════════════
+    // ★ ドキュメントIDを {fromUid}_{toUid} に固定する。
+    //   旧実装は addDoc() のランダムIDだったため、follows のルールから
+    //   「承認済みか」を参照できなかった。
     match /followRequests/{requestId} {
       allow read: if isSignedIn() && (
         resource.data.fromUid == request.auth.uid ||
         resource.data.toUid == request.auth.uid
       );
-      allow create: if isSignedIn() && request.resource.data.fromUid == request.auth.uid;
-      allow update: if isSignedIn() && (
-        resource.data.toUid == request.auth.uid ||
-        resource.data.fromUid == request.auth.uid
-      );
+
+      allow create: if isSignedIn() &&
+        requestId == request.resource.data.fromUid + '_' + request.resource.data.toUid &&
+        request.resource.data.fromUid == request.auth.uid &&
+        request.resource.data.toUid != request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.get('fromName', '').size() <= 50;
+
+      // ★ 承認できるのは「申請された側（toUid）」だけ。
+      //   旧ルールは fromUid にも update を許していたため、
+      //   申請者が自分で status:'accepted' に書き換えられた。
+      allow update: if isSignedIn() &&
+        resource.data.toUid == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+        request.resource.data.status in ['accepted', 'rejected'];
+
       allow delete: if isSignedIn() && (
         resource.data.fromUid == request.auth.uid ||
         resource.data.toUid == request.auth.uid
       );
     }
 
-    // ─── follows コレクション ─────────────────────────────────────────
+    // ═══ follows コレクション ═══════════════════════════════════════════
+    // ★★ 本ファイルで最も重要な箇所 ★★
+    //
+    // isFollowerOf() は follows/{閲覧者UID}_{対象UID} の存在だけを見て
+    // 鍵アカウントの投稿を開放する。したがってこの create ルールが
+    // 「ドキュメントIDと中身の整合性」を検証しないと、攻撃者は
+    //     setDoc(doc(db,'follows','攻撃者_被害者'), {followerId:'攻撃者', ...})
+    // の1行で承認フローを丸ごとバイパスできる。
+    //
+    // 許可する作成経路は次の2つだけ:
+    //   A) 公開アカウント宛 … 申請者本人が直接作成できる（承認不要な仕様）
+    //   B) 鍵アカウント宛  … 「フォローされる側の本人」が、承認済みリクエストを
+    //                        根拠にして作成する。攻撃者は自分では作れない。
     match /follows/{followId} {
+      // NOTE: ソーシャルグラフを全ログインユーザーに公開している。
+      //   フォロワー一覧UIがこれに依存しているため現状維持。
+      //   将来的に当事者限定へ絞るなら、UI側の集計方法を先に変更すること。
       allow read: if isSignedIn();
-      allow create: if isSignedIn() && (
-        request.resource.data.followerId == request.auth.uid ||
-        request.resource.data.followingId == request.auth.uid
-      );
+
+      allow create: if isSignedIn() &&
+        // ① IDと中身が一致していること（これが無いと全て崩壊する）
+        followId == request.resource.data.followerId + '_' + request.resource.data.followingId &&
+        // ② 自己フォロー禁止
+        request.resource.data.followerId != request.resource.data.followingId &&
+        (
+          // A) 公開アカウントを、申請者本人がフォローする
+          (
+            request.resource.data.followerId == request.auth.uid &&
+            isPublicAccount(request.resource.data.followingId)
+          ) ||
+          // B) 鍵アカウント本人が、承認済みリクエストを根拠に作成する
+          (
+            request.resource.data.followingId == request.auth.uid &&
+            exists(/databases/$(database)/documents/followRequests/$(followId)) &&
+            get(/databases/$(database)/documents/followRequests/$(followId))
+              .data.status == 'accepted'
+          )
+        );
+
+      // フォロー解除は当事者どちらからでも可（ブロック相当の操作を含む）
       allow delete: if isSignedIn() && (
         resource.data.followerId == request.auth.uid ||
         resource.data.followingId == request.auth.uid
       );
+
       allow update: if false;
     }
   }

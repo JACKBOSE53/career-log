@@ -20,6 +20,7 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  getCountFromServer,
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import type { Category } from './mockData';
@@ -90,7 +91,7 @@ export async function sendFollowRequest(
   let senderAvatar = fromAvatar;
 
   try {
-    const senderSnap = await getDoc(doc(db, 'users', fromUid));
+    const senderSnap = await getDoc(doc(db, 'publicProfiles', fromUid));
     if (senderSnap.exists()) {
       const data = senderSnap.data();
       if (data.name) senderName = data.name;
@@ -103,7 +104,7 @@ export async function sendFollowRequest(
   // 相手の公開設定（profileVisibility）を確認する
   let targetVisibility: 'public' | 'followers' | 'private' = 'public';
   try {
-    const targetSnap = await getDoc(doc(db, 'users', toUid));
+    const targetSnap = await getDoc(doc(db, 'publicProfiles', toUid));
     if (targetSnap.exists()) {
       const targetData = targetSnap.data();
       targetVisibility = targetData.profileVisibility || 'public';
@@ -127,11 +128,7 @@ export async function sendFollowRequest(
         createdAt: serverTimestamp(),
       });
 
-      // 3. フォロー・フォロワー数のカウントアップ
-      await updateDoc(doc(db, 'users', toUid), { followersCount: increment(1) });
-      await updateDoc(doc(db, 'users', fromUid), { followingCount: increment(1) });
-
-      // 4. 相手へのフォロー完了通知を送信
+      // 3. 相手へのフォロー完了通知を送信
       await createFirestoreNotification({
         userId: toUid,
         fromUid: fromUid,
@@ -275,15 +272,9 @@ export async function approveFollowRequest(
     console.warn('Failed to set follows doc:', e);
   }
 
-  // 4. フォロワー数/フォロー中数の更新
+  // 4. 申請元ユーザーへ承認通知を送る
   try {
-    await updateDoc(doc(db, 'users', toUid), { followersCount: increment(1) });
-    await updateDoc(doc(db, 'users', fromUid), { followingCount: increment(1) });
-  } catch (e) {}
-
-  // 5. 申請元ユーザーへ承認通知を送る
-  try {
-    const approverSnap = await getDoc(doc(db, 'users', toUid));
+    const approverSnap = await getDoc(doc(db, 'publicProfiles', toUid));
     const approverName = approverSnap.exists() ? approverSnap.data().name : 'ユーザー';
     const approverAvatar = approverSnap.exists() ? approverSnap.data().avatar : '';
     await createFirestoreNotification({
@@ -385,12 +376,6 @@ export async function unfollowUser(
   try {
     await deleteDoc(doc(db, 'follows', followId));
   } catch (e) {}
-
-  // 3. カウント更新
-  try {
-    await updateDoc(doc(db, 'users', targetUid), { followersCount: increment(-1) });
-    await updateDoc(doc(db, 'users', myUid), { followingCount: increment(-1) });
-  } catch (e) {}
 }
 
 /** 自分がフォロー中のユーザーID一覧をリアルタイム購読 */
@@ -411,14 +396,28 @@ export function subscribeToFollowingUids(
   });
 }
 
-/** ユーザー検索 (Firestore実データ) */
+/** フォロワー数を follows コレクションから集計する（followingId == uid の件数） */
+export async function getFollowersCount(uid: string): Promise<number> {
+  const q = query(collection(db, 'follows'), where('followingId', '==', uid));
+  const snap = await getCountFromServer(q);
+  return snap.data().count;
+}
+
+/** フォロー中数を follows コレクションから集計する（followerId == uid の件数） */
+export async function getFollowingCount(uid: string): Promise<number> {
+  const q = query(collection(db, 'follows'), where('followerId', '==', uid));
+  const snap = await getCountFromServer(q);
+  return snap.data().count;
+}
+
+/** ユーザー検索 (Firestore実データ、公開プロフィールのみ対象) */
 export async function searchUsersFirestore(queryText: string): Promise<UserProfile[]> {
   if (!queryText.trim()) return [];
-  const q = query(collection(db, 'users'));
+  const q = query(collection(db, 'publicProfiles'));
   const snap = await getDocs(q);
   const lower = queryText.toLowerCase();
   return snap.docs
-    .map((d) => ({ ...d.data(), id: d.id } as UserProfile))
+    .map((d) => ({ email: '', ...d.data(), id: d.id } as UserProfile))
     .filter((u) => {
       const name = (u.name || '').toLowerCase();
       const univ = (u.university || '').toLowerCase();
@@ -494,38 +493,111 @@ export async function markAllNotificationsReadFirestore(userId: string) {
 }
 
 // ─── User Profile ─────────────────────────────────────────────────────────────
+// users: 非公開情報（email 等）。本人のみ read/write 可能。
+// publicProfiles: 公開情報（name / avatar / university / grade / targetIndustry / bio /
+//   profileVisibility）。ログイン済みなら誰でも read 可能。email 等の個人情報は
+//   絶対にここへ書き込まないこと（firestore.rules 側でも弾かれる）。
 export async function createUserProfile(uid: string, data: Partial<UserProfile>) {
-  const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, {
-    ...data,
+  const avatar = data.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + uid; // デフォルトアバター
+
+  await setDoc(doc(db, 'users', uid), {
+    email: data.email ?? '',
     joinedAt: serverTimestamp(),
     followersCount: 0,
     followingCount: 0,
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + uid, // デフォルトアバター
+  }, { merge: true });
+
+  await setDoc(doc(db, 'publicProfiles', uid), {
+    name: data.name ?? '',
+    avatar,
+    university: data.university ?? '',
+    grade: data.grade ?? '',
+    targetIndustry: data.targetIndustry ?? '',
+    bio: data.bio ?? '',
+    profileVisibility: data.profileVisibility || 'public',
   }, { merge: true });
 }
 
+/** 本人用: users + publicProfiles を結合した完全なプロフィールを取得する */
 export async function getUserProfile(uid: string): Promise<UserProfile | null> {
-  const snap = await getDoc(doc(db, 'users', uid));
-  if (snap.exists()) {
-    const data = snap.data();
-    return {
-      ...data,
-      id: snap.id,
-      joinedAt: data.joinedAt?.toDate() || new Date(),
-    } as UserProfile;
-  }
-  return null;
+  const [privateSnap, publicSnap] = await Promise.all([
+    getDoc(doc(db, 'users', uid)),
+    getDoc(doc(db, 'publicProfiles', uid)),
+  ]);
+  if (!privateSnap.exists() && !publicSnap.exists()) return null;
+  const privateData = privateSnap.data() || {};
+  const publicData = publicSnap.data() || {};
+  return {
+    ...publicData,
+    ...privateData,
+    id: uid,
+    joinedAt: privateData.joinedAt?.toDate() || new Date(),
+  } as UserProfile;
 }
 
+/** 本人用: users + publicProfiles を結合してリアルタイム購読する */
 export function subscribeToUserProfile(uid: string, callback: (profile: UserProfile | null) => void) {
-  return onSnapshot(doc(db, 'users', uid), (snap) => {
+  let privateData: Record<string, any> | null = null;
+  let publicData: Record<string, any> | null = null;
+  let privateLoaded = false;
+  let publicLoaded = false;
+
+  const emit = () => {
+    if (!privateLoaded || !publicLoaded) return;
+    if (!privateData && !publicData) {
+      callback(null);
+      return;
+    }
+    callback({
+      ...(publicData || {}),
+      ...(privateData || {}),
+      id: uid,
+      joinedAt: privateData?.joinedAt?.toDate() || new Date(),
+    } as UserProfile);
+  };
+
+  const unsubPrivate = onSnapshot(doc(db, 'users', uid), (snap) => {
+    privateData = snap.exists() ? snap.data() : null;
+    privateLoaded = true;
+    emit();
+  });
+  const unsubPublic = onSnapshot(doc(db, 'publicProfiles', uid), (snap) => {
+    publicData = snap.exists() ? snap.data() : null;
+    publicLoaded = true;
+    emit();
+  });
+
+  return () => {
+    unsubPrivate();
+    unsubPublic();
+  };
+}
+
+/** 他人用: publicProfiles のみを取得する（email 等の非公開情報は含まれない） */
+export async function getPublicProfile(uid: string): Promise<UserProfile | null> {
+  const snap = await getDoc(doc(db, 'publicProfiles', uid));
+  if (!snap.exists()) return null;
+  return {
+    email: '',
+    followersCount: 0,
+    followingCount: 0,
+    joinedAt: new Date(),
+    ...snap.data(),
+    id: uid,
+  } as UserProfile;
+}
+
+/** 他人用: publicProfiles のみをリアルタイム購読する */
+export function subscribeToPublicProfile(uid: string, callback: (profile: UserProfile | null) => void) {
+  return onSnapshot(doc(db, 'publicProfiles', uid), (snap) => {
     if (snap.exists()) {
-      const data = snap.data();
       callback({
-        ...data,
-        id: snap.id,
-        joinedAt: data.joinedAt?.toDate() || new Date(),
+        email: '',
+        followersCount: 0,
+        followingCount: 0,
+        joinedAt: new Date(),
+        ...snap.data(),
+        id: uid,
       } as UserProfile);
     } else {
       callback(null);
@@ -533,9 +605,20 @@ export function subscribeToUserProfile(uid: string, callback: (profile: UserProf
   });
 }
 
+/** 公開プロフィール項目のみを更新する（name / avatar / university / grade /
+ *  targetIndustry / bio / profileVisibility）。email 等はここでは扱わない。 */
 export async function updateUserProfile(uid: string, data: Partial<UserProfile>) {
-  const userRef = doc(db, 'users', uid);
-  await setDoc(userRef, data, { merge: true });
+  const { name, avatar, university, grade, targetIndustry, bio, profileVisibility } = data;
+  const publicData = {
+    ...(name !== undefined && { name }),
+    ...(avatar !== undefined && { avatar }),
+    ...(university !== undefined && { university }),
+    ...(grade !== undefined && { grade }),
+    ...(targetIndustry !== undefined && { targetIndustry }),
+    ...(bio !== undefined && { bio }),
+    ...(profileVisibility !== undefined && { profileVisibility }),
+  };
+  await setDoc(doc(db, 'publicProfiles', uid), publicData, { merge: true });
 }
 
 // ─── Local Backup Storage ───────────────────────────────────────────────────
@@ -872,7 +955,7 @@ export async function toggleLikePost(postId: string, userId: string, currentlyLi
       if (postSnap.exists()) {
         const postData = postSnap.data();
         const postAuthorId = postData.userId;
-        const likerSnap = await getDoc(doc(db, 'users', userId));
+        const likerSnap = await getDoc(doc(db, 'publicProfiles', userId));
         const likerName = likerSnap.exists() ? likerSnap.data().name : 'ユーザー';
         const likerAvatar = likerSnap.exists() ? likerSnap.data().avatar : '';
 
@@ -935,7 +1018,7 @@ export async function addComment(postId: string, userId: string, content: string
     if (postSnap.exists()) {
       const postData = postSnap.data();
       const postAuthorId = postData.userId;
-      const commenterSnap = await getDoc(doc(db, 'users', userId));
+      const commenterSnap = await getDoc(doc(db, 'publicProfiles', userId));
       const commenterName = commenterSnap.exists() ? commenterSnap.data().name : 'ユーザー';
       const commenterAvatar = commenterSnap.exists() ? commenterSnap.data().avatar : '';
 

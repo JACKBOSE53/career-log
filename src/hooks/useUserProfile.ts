@@ -1,8 +1,12 @@
 import { useState, useEffect } from 'react';
-import { subscribeToUserProfile, type UserProfile } from '../db/firestore';
+import { subscribeToUserProfile, subscribeToPublicProfile, type UserProfile } from '../db/firestore';
 import { getUserById } from '../db/store';
 
-export function useUserProfile(uid: string | undefined) {
+/**
+ * @param isSelf 本人のプロフィールかどうか。true なら users + publicProfiles を
+ *   結合した完全な情報（email含む）を、false なら publicProfiles のみを購読する。
+ */
+export function useUserProfile(uid: string | undefined, isSelf: boolean = false) {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState<boolean>(!!uid);
   const [error, setError] = useState<Error | null>(null);
@@ -15,7 +19,8 @@ export function useUserProfile(uid: string | undefined) {
     }
 
     setLoading(true);
-    const unsubscribe = subscribeToUserProfile(uid, (data) => {
+    const subscribe = isSelf ? subscribeToUserProfile : subscribeToPublicProfile;
+    const unsubscribe = subscribe(uid, (data) => {
       if (data) {
         setProfile(data);
       } else {
@@ -43,7 +48,7 @@ export function useUserProfile(uid: string | undefined) {
     });
 
     return () => unsubscribe();
-  }, [uid]);
+  }, [uid, isSelf]);
 
   return { profile, loading, error };
 }
