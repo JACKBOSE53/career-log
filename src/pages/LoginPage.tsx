@@ -2,11 +2,12 @@ import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import LegalModal from '../components/LegalModal';
+import SignupWizard from './SignupWizard';
 
 type Tab = 'login' | 'signup';
 
 export default function LoginPage() {
-  const { login, signup } = useAuth();
+  const { login } = useAuth();
   const [tab, setTab] = useState<Tab>('login');
 
   // ── 規約モーダル状態 ───────────────────────────────────────
@@ -15,12 +16,6 @@ export default function LoginPage() {
   // ── ログインフォーム状態 ──────────────────────────────────────
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-
-  // ── 新規登録フォーム状態 ─────────────────────────────────────
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupPasswordConfirm, setSignupPasswordConfirm] = useState('');
-
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -43,31 +38,9 @@ export default function LoginPage() {
     setLoading(false);
   }
 
-  // ── 新規登録処理 ─────────────────────────────────────────────
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-
-    if (signupPassword.length < 6) return setError('パスワードは6文字以上で入力してください');
-    if (signupPassword !== signupPasswordConfirm) return setError('パスワードが一致しません');
-
-    setLoading(true);
-    try {
-      await signup(signupEmail, signupPassword, "");
-    } catch (err: unknown) {
-      const code = (err as { code?: string }).code ?? '';
-      const msg = (err as { message?: string }).message ?? '';
-      console.error('Signup error code:', code, 'message:', msg);
-      setError(getErrorMessage(code) + (code ? ` (${code})` : ''));
-    }
-    setLoading(false);
-  }
-
   function getErrorMessage(code: string): string {
     if (code === 'auth/user-not-found' || code === 'auth/wrong-password' || code === 'auth/invalid-credential')
       return 'メールアドレスまたはパスワードが正しくありません';
-    if (code === 'auth/email-already-in-use') return 'このメールアドレスはすでに登録されています';
-    if (code === 'auth/weak-password') return 'パスワードは6文字以上で入力してください';
     if (code === 'auth/invalid-email') return 'メールアドレスの形式が正しくありません';
     return 'エラーが発生しました。もう一度お試しください';
   }
@@ -106,7 +79,13 @@ export default function LoginPage() {
         }} />
       </div>
 
-      <div style={{ position: 'relative', zIndex: 1, width: '100%', maxWidth: '440px' }}>
+      <div style={{
+        position: 'relative',
+        zIndex: 1,
+        width: '100%',
+        maxWidth: tab === 'signup' ? '500px' : '440px',
+        transition: 'max-width 0.25s ease',
+      }}>
         {/* ロゴ */}
         <div style={{ textAlign: 'center', marginBottom: '36px' }}>
           <div style={{
@@ -178,70 +157,13 @@ export default function LoginPage() {
             </form>
           )}
 
-          {/* ─── 新規登録フォーム ─────────────────────────────── */}
+          {/* ─── 新規登録ウィザード ─────────────────────────── */}
           {tab === 'signup' && (
-            <form onSubmit={handleSignup}>
-              <div style={fieldStyle}>
-                <label style={labelStyle}>メールアドレス</label>
-                <input type="email" value={signupEmail} onChange={(e) => setSignupEmail(e.target.value)}
-                  placeholder="your@email.com" required style={inputStyle}
-                  onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                  onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
-              </div>
-
-              <div style={fieldStyle}>
-                <label style={labelStyle}>パスワード <span style={{ color: '#64748B', fontWeight: 400 }}>（6文字以上）</span></label>
-                <div style={{ position: 'relative' }}>
-                  <input type={showPassword ? 'text' : 'password'} value={signupPassword} onChange={(e) => setSignupPassword(e.target.value)}
-                    placeholder="6文字以上のパスワード" required style={{ ...inputStyle, paddingRight: 40 }}
-                    onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                    onBlur={(e) => (e.target.style.borderColor = '#E2E8F0')} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, display: 'flex'
-                  }}>
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-              </div>
-
-              <div style={{ marginBottom: '24px' }}>
-                <label style={labelStyle}>パスワード（確認）</label>
-                <div style={{ position: 'relative' }}>
-                  <input type={showPassword ? 'text' : 'password'} value={signupPasswordConfirm} onChange={(e) => setSignupPasswordConfirm(e.target.value)}
-                    placeholder="パスワードを再入力" required style={{
-                      ...inputStyle,
-                      paddingRight: 40,
-                      borderColor: signupPasswordConfirm && signupPassword !== signupPasswordConfirm
-                        ? '#EF4444' : '#E2E8F0',
-                    }}
-                    onFocus={(e) => (e.target.style.borderColor = '#EA580C')}
-                    onBlur={(e) => {
-                      e.target.style.borderColor =
-                        signupPasswordConfirm && signupPassword !== signupPasswordConfirm
-                          ? '#EF4444' : '#E2E8F0';
-                    }} />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'none', border: 'none', cursor: 'pointer', color: '#64748B', padding: 4, display: 'flex'
-                  }}>
-                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                  </button>
-                </div>
-                {signupPasswordConfirm && signupPassword !== signupPasswordConfirm && (
-                  <p style={{ color: '#EF4444', fontSize: '12px', marginTop: '6px', marginBottom: 0 }}>
-                    パスワードが一致していません
-                  </p>
-                )}
-              </div>
-
-              {error && <ErrorBox message={error} />}
-              <SubmitButton loading={loading} label="アカウントを作成" />
-
-              <p style={{ color: '#64748B', fontSize: '12px', textAlign: 'center', marginTop: '16px', marginBottom: 0 }}>
-                登録後はプロフィール設定画面へ進みます。
-              </p>
-            </form>
+            <SignupWizard
+              onSwitchToLogin={() => handleTabChange('login')}
+              onOpenTerms={() => setLegalModalType('terms')}
+              onOpenPrivacy={() => setLegalModalType('privacy')}
+            />
           )}
         </div>
 

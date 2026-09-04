@@ -16,7 +16,7 @@ interface AuthContextType {
   profile: UserProfile | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, displayName: string) => Promise<void>;
+  signup: (email: string, password: string, displayName: string) => Promise<User>;
   logout: () => Promise<void>;
 }
 
@@ -62,9 +62,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithEmailAndPassword(auth, email, password);
   }
 
-  async function signup(email: string, password: string, displayName: string) {
+  async function signup(email: string, password: string, displayName: string): Promise<User> {
     const { user } = await createUserWithEmailAndPassword(auth, email, password);
-    await updateFirebaseAuthProfile(user, { displayName });
+    if (displayName) {
+      await updateFirebaseAuthProfile(user, { displayName });
+    }
+    return user;
   }
 
   async function logout() {
