@@ -162,20 +162,14 @@ export async function sendFollowRequest(
     console.warn('Subcollection followRequest set failed:', e);
   }
 
-  // 2. トップレベル: followRequests コレクション
+  // 2. トップレベル: followRequests/{fromUid}_{toUid}
+  //    ID をこの形式に固定するのは firestore.rules 側の要求。follows の create ルールが
+  //    「このIDのfollowRequestsがaccepted済みか」を根拠に承認済み判定を行うため、
+  //    addDoc() のランダムIDでは follow 成立時に参照できず権限エラーになる。
   try {
-    const existing = query(
-      collection(db, 'followRequests'),
-      where('fromUid', '==', fromUid),
-      where('toUid', '==', toUid),
-      where('status', '==', 'pending'),
-    );
-    const snap = await getDocs(existing);
-    if (snap.empty) {
-      await addDoc(collection(db, 'followRequests'), reqData);
-    }
+    await setDoc(doc(db, 'followRequests', `${fromUid}_${toUid}`), reqData, { merge: true });
   } catch (e) {
-    console.warn('Top level followRequest add failed:', e);
+    console.warn('Top level followRequest set failed:', e);
   }
 
   return { directlyFollowed: false };
@@ -240,17 +234,22 @@ export async function hasPendingFollowRequest(fromUid: string, toUid: string): P
 
 /** フォローリクエストを承認する */
 export async function approveFollowRequest(
-  requestId: string,
   fromUid: string,
   toUid: string,
 ): Promise<void> {
-  // 1. users/{toUid}/followRequests/{fromUid} と followRequests/{requestId} を削除/acceptedへ
+  // follows の create ルールは followRequests/{fromUid}_{toUid} が status:'accepted' で
+  // 存在することを根拠に承認済み判定を行うため、トップレベルのIDは必ずこの形式にする。
+  const followId = `${fromUid}_${toUid}`;
+
+  // 1. users/{toUid}/followRequests/{fromUid} を削除、followRequests/{followId} をacceptedへ
   try {
     await deleteDoc(doc(db, `users/${toUid}/followRequests`, fromUid));
   } catch (e) {}
   try {
-    await updateDoc(doc(db, 'followRequests', requestId), { status: 'accepted' });
-  } catch (e) {}
+    await updateDoc(doc(db, 'followRequests', followId), { status: 'accepted' });
+  } catch (e) {
+    console.warn('Failed to mark top-level followRequest accepted:', e);
+  }
 
   // 2. サブコレクション: users/{fromUid}/following/{toUid} & users/{toUid}/followers/{fromUid}
   try {
@@ -261,7 +260,6 @@ export async function approveFollowRequest(
   }
 
   // 3. トップレベル: follows/{fromUid}_{toUid}
-  const followId = `${fromUid}_${toUid}`;
   try {
     await setDoc(doc(db, 'follows', followId), {
       followerId: fromUid,
@@ -289,14 +287,12 @@ export async function approveFollowRequest(
 }
 
 /** フォローリクエストを拒否する */
-export async function rejectFollowRequest(requestId: string, fromUid?: string, toUid?: string): Promise<void> {
-  if (toUid && fromUid) {
-    try {
-      await deleteDoc(doc(db, `users/${toUid}/followRequests`, fromUid));
-    } catch (e) {}
-  }
+export async function rejectFollowRequest(fromUid: string, toUid: string): Promise<void> {
   try {
-    await updateDoc(doc(db, 'followRequests', requestId), { status: 'rejected' });
+    await deleteDoc(doc(db, `users/${toUid}/followRequests`, fromUid));
+  } catch (e) {}
+  try {
+    await updateDoc(doc(db, 'followRequests', `${fromUid}_${toUid}`), { status: 'rejected' });
   } catch (e) {}
 }
 

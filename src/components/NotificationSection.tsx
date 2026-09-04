@@ -119,7 +119,7 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     if (!req.id) return;
     setProcessingIds((prev) => new Set(prev).add(req.id!));
     try {
-      await approveFollowRequest(req.id, req.fromUid, req.toUid);
+      await approveFollowRequest(req.fromUid, req.toUid);
       onUpdate();
     } finally {
       setProcessingIds((prev) => { const next = new Set(prev); next.delete(req.id!); return next; });
@@ -130,7 +130,7 @@ export default function NotificationSection({ onUpdate, onProfileClick }: Notifi
     if (!req.id) return;
     setProcessingIds((prev) => new Set(prev).add(req.id!));
     try {
-      await rejectFollowRequest(req.id);
+      await rejectFollowRequest(req.fromUid, req.toUid);
       onUpdate();
     } finally {
       setProcessingIds((prev) => { const next = new Set(prev); next.delete(req.id!); return next; });
