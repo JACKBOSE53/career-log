@@ -116,11 +116,10 @@ export async function sendFollowRequest(
   // A. 公開アカウントの場合：リクエストを送らず直接フォロー完了！
   if (targetVisibility === 'public') {
     try {
-      // 1. サブコレクションにフォロー情報を登録
-      await setDoc(doc(db, `users/${fromUid}/following`, toUid), { createdAt: serverTimestamp() });
-      await setDoc(doc(db, `users/${toUid}/followers`, fromUid), { createdAt: serverTimestamp() });
-
-      // 2. トップレベルの follows コレクションに登録
+      // トップレベルの follows コレクションに登録。
+      // users/{uid}/following・followers は「本人しか書き込めない」表示用ミラーで、
+      // ここでは相手側(toUid)のfollowersミラーへの書き込みが常に権限エラーになるため
+      // (呼び出し元の auth は fromUid)、意図的に書き込まない。真実の情報源は follows のみ。
       const followId = `${fromUid}_${toUid}`;
       await setDoc(doc(db, 'follows', followId), {
         followerId: fromUid,
@@ -128,7 +127,7 @@ export async function sendFollowRequest(
         createdAt: serverTimestamp(),
       });
 
-      // 3. 相手へのフォロー完了通知を送信
+      // 相手へのフォロー完了通知を送信
       await createFirestoreNotification({
         userId: toUid,
         fromUid: fromUid,
@@ -138,6 +137,7 @@ export async function sendFollowRequest(
         content: 'あなたをフォローしました',
       });
 
+      notifyDataUpdated();
       return { directlyFollowed: true };
     } catch (e) {
       console.error('Direct follow failed, falling back to follow request:', e);
@@ -251,15 +251,9 @@ export async function approveFollowRequest(
     console.warn('Failed to mark top-level followRequest accepted:', e);
   }
 
-  // 2. サブコレクション: users/{fromUid}/following/{toUid} & users/{toUid}/followers/{fromUid}
-  try {
-    await setDoc(doc(db, `users/${fromUid}/following`, toUid), { createdAt: serverTimestamp() });
-    await setDoc(doc(db, `users/${toUid}/followers`, fromUid), { createdAt: serverTimestamp() });
-  } catch (e) {
-    console.warn('Failed to set subcollection follow docs:', e);
-  }
-
-  // 3. トップレベル: follows/{fromUid}_{toUid}
+  // 2. トップレベル: follows/{fromUid}_{toUid}
+  //    users/{uid}/following・followers ミラーへは書き込まない。承認者(toUid)の auth では
+  //    fromUid 自身のミラーに書き込む権限が無く常に失敗するため（真実の情報源は follows のみ）。
   try {
     await setDoc(doc(db, 'follows', followId), {
       followerId: fromUid,
@@ -270,7 +264,7 @@ export async function approveFollowRequest(
     console.warn('Failed to set follows doc:', e);
   }
 
-  // 4. 申請元ユーザーへ承認通知を送る
+  // 3. 申請元ユーザーへ承認通知を送る
   try {
     const approverSnap = await getDoc(doc(db, 'publicProfiles', toUid));
     const approverName = approverSnap.exists() ? approverSnap.data().name : 'ユーザー';
@@ -284,6 +278,8 @@ export async function approveFollowRequest(
       content: 'フォローリクエストが承認されました！',
     });
   } catch (e) {}
+
+  notifyDataUpdated();
 }
 
 /** フォローリクエストを拒否する */
@@ -302,11 +298,6 @@ export async function isFollowingFirestore(
   targetUid: string,
 ): Promise<boolean> {
   if (!myUid || !targetUid) return false;
-  try {
-    const subSnap = await getDoc(doc(db, `users/${myUid}/following`, targetUid));
-    if (subSnap.exists()) return true;
-  } catch (e) {}
-
   const followId = `${myUid}_${targetUid}`;
   const snap = await getDoc(doc(db, 'follows', followId));
   return snap.exists();
@@ -361,34 +352,32 @@ export async function unfollowUser(
   myUid: string,
   targetUid: string,
 ): Promise<void> {
-  // 1. サブコレクション削除
-  try {
-    await deleteDoc(doc(db, `users/${myUid}/following`, targetUid));
-    await deleteDoc(doc(db, `users/${targetUid}/followers`, myUid));
-  } catch (e) {}
-
-  // 2. トップレベル削除
+  // follows が唯一の情報源。users/{uid}/following・followers ミラーは
+  // 削除する必要すら無い（両者ともどのみ書き込めていない）。
   const followId = `${myUid}_${targetUid}`;
   try {
     await deleteDoc(doc(db, 'follows', followId));
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Failed to delete follows doc:', e);
+  }
+  notifyDataUpdated();
 }
 
-/** 自分がフォロー中のユーザーID一覧をリアルタイム購読 */
+/** 自分がフォロー中のユーザーID一覧をリアルタイム購読
+ *  users/{uid}/following ミラーは「本人しか書き込めない」ため、鍵アカウントの
+ *  承認フロー（承認する側の auth で動く）からは書き込めず永久に空になる。
+ *  follows コレクションが唯一の正しい情報源なので、常にそちらを見る。 */
 export function subscribeToFollowingUids(
   myUid: string,
   callback: (followingUids: string[]) => void,
 ) {
-  const subRef = collection(db, `users/${myUid}/following`);
-  return onSnapshot(subRef, (snapshot) => {
-    const uids = snapshot.docs.map((d) => d.id);
+  const q = query(collection(db, 'follows'), where('followerId', '==', myUid));
+  return onSnapshot(q, (snapshot) => {
+    const uids = snapshot.docs.map((d) => d.data().followingId as string);
     callback(uids);
   }, (err) => {
-    const q = query(collection(db, 'follows'), where('followerId', '==', myUid));
-    return onSnapshot(q, (snapshot) => {
-      const uids = snapshot.docs.map((d) => d.data().followingId as string);
-      callback(uids);
-    });
+    console.warn('Failed to subscribe following uids:', err);
+    callback([]);
   });
 }
 

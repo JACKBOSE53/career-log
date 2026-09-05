@@ -65,6 +65,14 @@ export default function ProfileView({ userId, onClose, onUpdate, onToast }: Prof
   useEffect(() => {
     if (!effectiveTargetUid) return;
     refetchFollowCounts(effectiveTargetUid);
+    // 鍵アカウントの承認は NotificationSection 側で行われるため、この画面を開いたまま
+    // 待っていても自動では反映されない。承認/フォロー解除のたびに飛ぶこのイベントで
+    // 数字を取り直す。
+    const handleFollowCountsMaybeChanged = () => refetchFollowCounts(effectiveTargetUid);
+    window.addEventListener('career_log_data_updated', handleFollowCountsMaybeChanged);
+    return () => {
+      window.removeEventListener('career_log_data_updated', handleFollowCountsMaybeChanged);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveTargetUid]);
 
